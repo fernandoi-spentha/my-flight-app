@@ -1599,19 +1599,39 @@
             return;
         }
 
-        var fl = FLIGHTS[code];
-        if (!fl) {
-            var inp = document.getElementById('inFlight');
-            inp.style.borderColor = '#f87171';
-            inp.value = '';
-            inp.placeholder = 'Prueba: IB3170, VY1001, BA456';
-            setTimeout(function() {
-                inp.style.borderColor = '';
-                inp.placeholder = 'Ej: IB3170';
-            }, 3000);
-            return;
+  var fl = FLIGHTS[code];
+  if (!fl) {
+    try {
+      var apiUrl = '/api/flight?number=' + encodeURIComponent(code);
+      var apiR = await fetch(apiUrl);
+      if (apiR.ok) {
+        var apiData = await apiR.json();
+        if (!apiData.error && apiData.departure && apiData.arrival) {
+          var cruiseFl = 360;
+          var dur = apiData.durationMin || 120;
+          if (dur < 60) cruiseFl = 280;
+          else if (dur < 90) cruiseFl = 320;
+          else if (dur < 150) cruiseFl = 360;
+          else cruiseFl = 380;
+          fl = { al: apiData.flight.airline || code.substring(0,2), from: apiData.departure.iata, to: apiData.arrival.iata, dur: dur, ac: apiData.aircraft.type || 'A320', fl: cruiseFl };
+          if (!AP[fl.from] && apiData.departure.lat) {
+            AP[fl.from] = { name: apiData.departure.name, city: apiData.departure.name, lat: apiData.departure.lat, lon: apiData.departure.lon, taxi: 10, dep: function(wd,ws){ if(ws<5)return{id:'01',h:10}; if(wd>=315||wd<45)return{id:'36',h:360}; if(wd>=45&&wd<135)return{id:'09',h:90}; if(wd>=135&&wd<225)return{id:'18',h:180}; return{id:'27',h:270}; }, arr: function(wd,ws){ if(ws<5)return{id:'01',h:10}; if(wd>=315||wd<45)return{id:'36',h:360}; if(wd>=45&&wd<135)return{id:'09',h:90}; if(wd>=135&&wd<225)return{id:'18',h:180}; return{id:'27',h:270}; } };
+          }
+          if (!AP[fl.to] && apiData.arrival.lat) {
+            AP[fl.to] = { name: apiData.arrival.name, city: apiData.arrival.name, lat: apiData.arrival.lat, lon: apiData.arrival.lon, taxi: 10, dep: function(wd,ws){ if(ws<5)return{id:'01',h:10}; if(wd>=315||wd<45)return{id:'36',h:360}; if(wd>=45&&wd<135)return{id:'09',h:90}; if(wd>=135&&wd<225)return{id:'18',h:180}; return{id:'27',h:270}; }, arr: function(wd,ws){ if(ws<5)return{id:'01',h:10}; if(wd>=315||wd<45)return{id:'36',h:360}; if(wd>=45&&wd<135)return{id:'09',h:90}; if(wd>=135&&wd<225)return{id:'18',h:180}; return{id:'27',h:270}; } };
+          }
         }
-
+      }
+    } catch(e) { console.log('API error:', e); }
+  }
+  if (!fl) {
+    var inp = document.getElementById('inFlight');
+    inp.style.borderColor = '#f87171';
+    inp.value = '';
+    inp.placeholder = 'Vuelo no encontrado';
+    setTimeout(function(){ inp.style.borderColor = ''; inp.placeholder = 'Ej: IB3170'; }, 3000);
+    return;
+  }
         var acCode = (acSel !== 'auto') ? acSel : fl.ac;
         var fAP = AP[fl.from];
         var tAP = AP[fl.to];
