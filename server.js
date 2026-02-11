@@ -14,7 +14,7 @@ app.get('/api/flight', async (req, res) => {
   if (!number) return res.status(400).json({ error: 'missing' });
   const API_KEY = process.env.AERODATABOX_KEY;
   console.log('KEY check:', !!API_KEY);
-  if (!API_KEY) return res.json({ error: 'no-key', fallback: true });
+  if (!API_KEY) return res.json({ error: 'no-key', fallback: true, env: Object.keys(process.env).filter(k => k.indexOf('AERO') >= 0) });
   try {
     const fd = date || new Date().toISOString().split('T')[0];
     const r1 = await fetch('https://aerodatabox.p.rapidapi.com/flights/number/' + encodeURIComponent(number) + '/' + fd, {
