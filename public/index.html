@@ -488,21 +488,47 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
   }
 
   // Route cloud events (mid-cruise) from sampled route points
-  // Check if any route point has significant cloud at cruise altitude
-  var routeTurb = false;
+  // Per-phase turbulence analysis
+  var turbClimb = 0;  // 0-3 scale
+  var turbCruise = 0;
+  var turbDescent = 0;
+  var turbCruiseMinStart = null, turbCruiseMinEnd = null;
+
+  // Climb: check origin layers thickness
+  for (var tc = 0; tc < originLayers.length; tc++) {
+    var tcl = originLayers[tc];
+    if (tcl.maxCover > 70) turbClimb = Math.max(turbClimb, 2);
+    else if (tcl.maxCover > 40) turbClimb = Math.max(turbClimb, 1);
+  }
+
+  // Cruise: check each route point for clouds at cruise altitude
   for (var rp = 0; rp < routeClouds.length; rp++) {
     var rc = routeClouds[rp];
+    var rpMin = Math.round(rc.frac * dur);
     if (rc.w.profile) {
       for (var pl = 0; pl < rc.w.profile.length; pl++) {
         var pLevel = rc.w.profile[pl];
-        if (pLevel.altM >= crM - 1500 && pLevel.altM <= crM + 1500 && pLevel.cover > 40) {
-          routeTurb = true;
-          break;
+        if (pLevel.altM >= crM - 1500 && pLevel.altM <= crM + 1500 && pLevel.cover > 30) {
+          if (pLevel.cover > 60) turbCruise = Math.max(turbCruise, 2);
+          else turbCruise = Math.max(turbCruise, 1);
+          if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin;
+          turbCruiseMinEnd = rpMin;
         }
       }
     }
-    if (routeTurb) break;
   }
+  var routeTurb = (turbCruise > 0);
+
+  // Descent: check destination layers thickness
+  for (var td = 0; td < destLayers.length; td++) {
+    var tdl = destLayers[td];
+    if (tdl.maxCover > 70) turbDescent = Math.max(turbDescent, 2);
+    else if (tdl.maxCover > 40) turbDescent = Math.max(turbDescent, 1);
+  }
+
+  var turbMax = Math.max(turbClimb, turbCruise, turbDescent);
+  var turbLabels = ['Imperceptible', 'Baja', 'Baja / Media', 'Media / Fuerte'];
+  var turbPhases = {climb: turbClimb, cruise: turbCruise, descent: turbDescent, max: turbMax, cruiseMinStart: turbCruiseMinStart, cruiseMinEnd: turbCruiseMinEnd};
 
   // Destination cloud layers for descent
   var dcEvents = [];
@@ -693,7 +719,7 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
     arrTimeStr = ('0'+at.getUTCHours()).slice(-2) + ':' + ('0'+at.getUTCMinutes()).slice(-2);
   }
 
-  return {tl:tl, narr:narr, sN:sN, ac:ac, oW:oW, dW:dW, depR:depR, arrR:arrR, dur:dur, fAP:fAP, tAP:tAP, fl:fl, isRealWeather:isRealWeather, depTimeStr:depTimeStr, arrTimeStr:arrTimeStr, routeTurb:routeTurb};
+  return {tl:tl, narr:narr, sN:sN, ac:ac, oW:oW, dW:dW, depR:depR, arrR:arrR, dur:dur, fAP:fAP, tAP:tAP, fl:fl, isRealWeather:isRealWeather, depTimeStr:depTimeStr, arrTimeStr:arrTimeStr, routeTurb:routeTurb, turbPhases:turbPhases};
 }
 
 // ============================================================
@@ -768,22 +794,28 @@ function renderBriefing(b) {
     h += '<div class="live fi" style="background:rgba(251,191,36,.1);border-color:rgba(251,191,36,.2)"><span class="live-dot" style="background:#fbbf24"></span> <span style="color:#fbbf24">Datos meteorológicos simulados</span></div>';
   }
 
-  // Turbulence estimate (moved up) — 4 scales, non-alarming colors
-  // 0=imperceptible, 1=baja, 2=baja/media, 3=media/fuerte
-  var turbLevel = 0;
-  if (b.routeTurb) turbLevel = 2; // clouds at cruise = baja/media
-  var turbInfo = [
-    {label:'Imperceptible', color:'#4e9eff', width:'10%'},
-    {label:'Baja', color:'#7a8ba8', width:'30%'},
-    {label:'Baja / Media', color:'#94a3b8', width:'55%'},
-    {label:'Media / Fuerte', color:'#64748b', width:'80%'}
-  ][turbLevel];
+  // Turbulence estimate with per-phase breakdown
+  var tp = b.turbPhases;
+  var turbLabels = ['Imperceptible', 'Baja', 'Baja / Media', 'Media / Fuerte'];
+  var turbColors = ['#4e9eff', '#7a8ba8', '#94a3b8', '#64748b'];
+  var turbWidths = ['10%', '30%', '55%', '80%'];
 
   h += '<div class="card fi">';
   h += '<div class="card-title">✈️ Turbulencia estimada</div>';
-  h += '<div class="turb-bar"><div class="turb-fill" style="width:' + turbInfo.width + ';background:' + turbInfo.color + '"></div></div>';
+  h += '<div class="turb-bar"><div class="turb-fill" style="width:' + turbWidths[tp.max] + ';background:' + turbColors[tp.max] + '"></div></div>';
   h += '<div style="display:flex;justify-content:space-between;font-size:11px;color:#4a5873;margin-top:4px"><span>Imperceptible</span><span>Baja</span><span>Baja/Media</span><span>Media/Fuerte</span></div>';
-  h += '<div style="text-align:center;margin-top:8px;font-size:14px;font-weight:500;color:' + turbInfo.color + '">' + turbInfo.label + '</div>';
+  h += '<div style="text-align:center;margin-top:10px;font-size:15px;font-weight:600;color:' + turbColors[tp.max] + '">' + turbLabels[tp.max] + '</div>';
+
+  // Phase breakdown
+  h += '<div style="margin-top:12px;display:flex;gap:8px">';
+  h += '<div style="flex:1;background:#0a0e1a;border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:#4a5873;margin-bottom:4px">Ascenso</div><div style="font-size:13px;font-weight:500;color:' + turbColors[tp.climb] + '">' + turbLabels[tp.climb] + '</div></div>';
+  h += '<div style="flex:1;background:#0a0e1a;border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:#4a5873;margin-bottom:4px">Crucero</div><div style="font-size:13px;font-weight:500;color:' + turbColors[tp.cruise] + '">' + turbLabels[tp.cruise];
+  if (tp.cruiseMinStart !== null && tp.cruise > 0) {
+    h += '<div style="font-size:10px;color:#4a5873;margin-top:2px">min ' + tp.cruiseMinStart + '-' + tp.cruiseMinEnd + '</div>';
+  }
+  h += '</div></div>';
+  h += '<div style="flex:1;background:#0a0e1a;border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:#4a5873;margin-bottom:4px">Descenso</div><div style="font-size:13px;font-weight:500;color:' + turbColors[tp.descent] + '">' + turbLabels[tp.descent] + '</div></div>';
+  h += '</div>';
   h += '</div>';
 
   // Safety banner
