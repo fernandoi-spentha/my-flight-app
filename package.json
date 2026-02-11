@@ -1,0 +1,16 @@
+{
+  "name": "myflight",
+  "version": "0.6.0",
+  "type": "module",
+  "private": true,
+  "description": "MyFlight - Tu copiloto narrativo para volar sin miedo",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
