@@ -121,7 +121,10 @@ body{
 .tl-title{font-size:14px;font-weight:600;margin-bottom:4px}
 .tl-desc{font-size:13px;color:#7a8ba8;line-height:1.5}
 .tl-safe{font-size:12px;color:#34d399;margin-top:4px;font-style:italic}
-.tl-gen{font-size:12px;color:#94a3b8;margin-top:4px;padding:6px 10px;background:rgba(100,116,139,.08);border-radius:8px;border-left:2px solid #475569}
+.tl-gen{font-size:12px;color:#94a3b8;margin-top:4px;padding:8px 12px;background:rgba(100,116,139,.06);border-radius:8px;border-left:2px solid #334155;line-height:1.5}
+.tl-item-gen{margin-left:20px}
+.tl-item-gen .tl-title{font-size:13px;font-weight:500}
+.tl-item-gen .tl-dot{width:8px;height:8px}
 .tl-phase{padding:6px 14px;background:rgba(78,158,255,.06);border:1px solid rgba(78,158,255,.12);border-radius:10px;font-size:12px;font-weight:600;color:#4e9eff;text-transform:uppercase;letter-spacing:.8px;margin-bottom:16px;text-align:center}
 
 /* Cloud bars */
@@ -698,35 +701,30 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
 // ============================================================
 function renderTL(items) {
   var h = '';
-  var lastPhase = '';
   for (var i = 0; i < items.length; i++) {
     var t = items[i];
     var last = (i === items.length - 1);
-
-    // Phase headers
-    var phase = '';
-    if (t.min < 0) phase = 'pre';
-    else if (t.min <= 1) phase = 'takeoff';
-    else if (t.min < items[0] || false) phase = 'climb'; // handled inline
-    else phase = '';
-
     var isGeneric = (t.type === 'always');
+
     var dotC = 'tl-dot-acc';
     if (t.c === 'cld') dotC = 'tl-dot-cld';
     if (t.c === 'ok') dotC = 'tl-dot-ok';
     if (t.c === 'wrn') dotC = 'tl-dot-wrn';
     if (t.c === 'ev') dotC = isGeneric ? 'tl-dot-gen' : 'tl-dot-ev';
+
     var titleCol = '#4e9eff';
     if (t.c === 'cld') titleCol = '#a78bfa';
     if (t.c === 'ok') titleCol = '#34d399';
-    if (t.c === 'wrn') titleCol = '#fbbf24';
-    if (t.c === 'ev') titleCol = isGeneric ? '#94a3b8' : '#fb923c';
+    if (t.c === 'wrn') titleCol = '#94a3b8';
+    if (t.c === 'ev') titleCol = isGeneric ? '#64748b' : '#fb923c';
+
     var ml;
     if (t.min < 0) ml = Math.abs(t.min) + "' antes";
     else if (t.min < 1) ml = 'Despegue';
     else ml = Math.round(t.min) + ' min';
 
-    h += '<div class="tl-item"><div class="tl-left"><span class="tl-time">' + ml + '</span><span class="tl-dot ' + dotC + '"></span>' + (!last ? '<span class="tl-line"></span>' : '') + '</div>';
+    var itemClass = 'tl-item' + (isGeneric ? ' tl-item-gen' : '');
+    h += '<div class="' + itemClass + '"><div class="tl-left"><span class="tl-time">' + ml + '</span><span class="tl-dot ' + dotC + '"></span>' + (!last ? '<span class="tl-line"></span>' : '') + '</div>';
     h += '<div class="tl-right"><div class="tl-title" style="color:' + titleCol + '">' + t.icon + ' ' + t.title + '</div>';
     if (isGeneric) {
       h += '<div class="tl-gen">' + t.desc + '</div>';
@@ -770,17 +768,22 @@ function renderBriefing(b) {
     h += '<div class="live fi" style="background:rgba(251,191,36,.1);border-color:rgba(251,191,36,.2)"><span class="live-dot" style="background:#fbbf24"></span> <span style="color:#fbbf24">Datos meteorológicos simulados</span></div>';
   }
 
-  // Turbulence estimate (moved up)
+  // Turbulence estimate (moved up) — 4 scales, non-alarming colors
+  // 0=imperceptible, 1=baja, 2=baja/media, 3=media/fuerte
+  var turbLevel = 0;
+  if (b.routeTurb) turbLevel = 2; // clouds at cruise = baja/media
+  var turbInfo = [
+    {label:'Imperceptible', color:'#4e9eff', width:'10%'},
+    {label:'Baja', color:'#7a8ba8', width:'30%'},
+    {label:'Baja / Media', color:'#94a3b8', width:'55%'},
+    {label:'Media / Fuerte', color:'#64748b', width:'80%'}
+  ][turbLevel];
+
   h += '<div class="card fi">';
-  if (b.routeTurb) {
-    h += '<div class="card-title">⚠️ Turbulencia estimada</div>';
-    h += '<div class="turb-bar"><div class="turb-fill" style="width:45%;background:#fbbf24"></div></div>';
-    h += '<div class="turb-label"><span>Baja</span><span style="color:#fbbf24;font-weight:500">Posible turbulencia ligera</span></div>';
-  } else {
-    h += '<div class="card-title">✅ Turbulencia estimada</div>';
-    h += '<div class="turb-bar"><div class="turb-fill"></div></div>';
-    h += '<div class="turb-label"><span>Baja</span><span style="color:#34d399;font-weight:500">Vuelo tranquilo</span></div>';
-  }
+  h += '<div class="card-title">✈️ Turbulencia estimada</div>';
+  h += '<div class="turb-bar"><div class="turb-fill" style="width:' + turbInfo.width + ';background:' + turbInfo.color + '"></div></div>';
+  h += '<div style="display:flex;justify-content:space-between;font-size:11px;color:#4a5873;margin-top:4px"><span>Imperceptible</span><span>Baja</span><span>Baja/Media</span><span>Media/Fuerte</span></div>';
+  h += '<div style="text-align:center;margin-top:8px;font-size:14px;font-weight:500;color:' + turbInfo.color + '">' + turbInfo.label + '</div>';
   h += '</div>';
 
   // Safety banner
