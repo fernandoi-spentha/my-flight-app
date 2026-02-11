@@ -20,6 +20,8 @@ app.get('/api/flight', async (req, res) => {
   }
 
   const API_KEY = process.env.AERODATABOX_KEY;
+  console.log('KEY exists:', !!API_KEY, 'length:', API_KEY ? API_KEY.length : 0);
+  if (!API_KEY) {
   if (!API_KEY) {
     return res.status(200).json({ error: 'API key no configurada', fallback: true });
   }
