@@ -47,6 +47,53 @@ var COORDS = {
   CAI:[30.12,31.41],ADD:[8.98,38.80],NBO:[-1.32,36.93],
 };
 
+// Get UTC offset in minutes for a timezone name at a given date
+function getUtcOffset(tzName, date) {
+  try {
+    var fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: tzName,
+      timeZoneName: 'shortOffset'
+    });
+    var parts = fmt.formatToParts(date);
+    var tzPart = parts.find(function(p) { return p.type === 'timeZoneName'; });
+    if (!tzPart) return null;
+    // tzPart.value is like "GMT+1", "GMT-5", "GMT+5:30", "GMT"
+    var val = tzPart.value.replace('GMT', '');
+    if (!val || val === '') return 0;
+    var sign = val.charAt(0) === '-' ? -1 : 1;
+    val = val.replace(/^[+-]/, '');
+    var hm = val.split(':');
+    var hours = parseInt(hm[0]) || 0;
+    var mins = parseInt(hm[1]) || 0;
+    return sign * (hours * 60 + mins);
+  } catch(e) {
+    return null;
+  }
+}
+
+// Convert local time string + timezone to real UTC timestamp
+function localToUtc(timeStr, tzName) {
+  // timeStr is like "2026-02-11T16:05:00+00:00" but it's actually local time
+  // Strip the fake +00:00 and parse as local
+  var clean = timeStr.replace(/[+-]\d{2}:\d{2}$/, '');
+  var date = new Date(clean + 'Z'); // Parse as if UTC
+  var offsetMin = getUtcOffset(tzName, date);
+  if (offsetMin === null) return date; // fallback
+  // Subtract offset to get real UTC
+  return new Date(date.getTime() - offsetMin * 60000);
+}
+
+// Calculate distance in km between two coords (haversine)
+function distKm(lat1, lon1, lat2, lon2) {
+  var R = 6371;
+  var dLat = (lat2 - lat1) * Math.PI / 180;
+  var dLon = (lon2 - lon1) * Math.PI / 180;
+  var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 app.get('/api/flight', async function(req, res) {
   var number = req.query.number;
   if (!number) return res.status(400).json({ error: 'missing' });
@@ -66,13 +113,29 @@ app.get('/api/flight', async function(req, res) {
     if (!depIata || !arrIata) return res.status(404).json({ error: 'Sin datos de aeropuerto' });
     var depCoords = COORDS[depIata] || null;
     var arrCoords = COORDS[arrIata] || null;
+
+    // Duration: use timezone-corrected calculation
     var depTime = f.departure && f.departure.scheduled;
     var arrTime = f.arrival && f.arrival.scheduled;
+    var depTz = f.departure && f.departure.timezone;
+    var arrTz = f.arrival && f.arrival.timezone;
     var dur = null;
-    if (depTime && arrTime) {
-      dur = Math.round((new Date(arrTime) - new Date(depTime)) / 60000);
+    var depUtc = null;
+    var arrUtc = null;
+
+    if (depTime && arrTime && depTz && arrTz) {
+      depUtc = localToUtc(depTime, depTz);
+      arrUtc = localToUtc(arrTime, arrTz);
+      dur = Math.round((arrUtc - depUtc) / 60000);
       if (dur < 0) dur = dur + 1440;
     }
+
+    // Fallback: estimate from distance if timezone conversion failed or dur seems wrong
+    if ((!dur || dur < 20) && depCoords && arrCoords) {
+      var dist = distKm(depCoords[0], depCoords[1], arrCoords[0], arrCoords[1]);
+      dur = Math.round(dist / 13.5 + 30); // ~810 km/h cruise + 30 min taxi/climb/descent
+    }
+
     var acModel = null;
     if (f.aircraft && f.aircraft.iata) acModel = f.aircraft.iata;
     res.json({
@@ -85,20 +148,24 @@ app.get('/api/flight', async function(req, res) {
       departure: {
         iata: depIata,
         name: f.departure.airport,
-        city: depCoords ? null : null,
+        city: null,
         lat: depCoords ? depCoords[0] : null,
         lon: depCoords ? depCoords[1] : null,
         scheduled: f.departure.scheduled,
-        terminal: f.departure.terminal
+        scheduledLocal: depTime,
+        terminal: f.departure.terminal,
+        timezone: depTz
       },
       arrival: {
         iata: arrIata,
         name: f.arrival.airport,
-        city: arrCoords ? null : null,
+        city: null,
         lat: arrCoords ? arrCoords[0] : null,
         lon: arrCoords ? arrCoords[1] : null,
         scheduled: f.arrival.scheduled,
-        terminal: f.arrival.terminal
+        scheduledLocal: arrTime,
+        terminal: f.arrival.terminal,
+        timezone: arrTz
       },
       aircraft: {
         model: acModel,
@@ -139,5 +206,5 @@ app.get('*', function(req, res) {
 });
 
 app.listen(PORT, '0.0.0.0', function() {
-  console.log('MyFlight v4 on port ' + PORT);
+  console.log('MyFlight v5 on port ' + PORT);
 });
