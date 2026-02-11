@@ -12,7 +12,7 @@ app.use(express.static(join(__dirname, 'public')));
 app.get('/api/flight', async (req, res) => {
   const { number, date } = req.query;
   if (!number) return res.status(400).json({ error: 'missing' });
-  const API_KEY = process.env.AERODATABOX_KEY;
+  const API_KEY = process.env.AERODATABOX_KEY || '2fb54a8e4fmsh09082c6f80a8bcep15c30';
   console.log('KEY check:', !!API_KEY);
   if (!API_KEY) return res.json({ error: 'no-key', fallback: true, env: Object.keys(process.env).filter(k => k.indexOf('AERO') >= 0) });
   try {
