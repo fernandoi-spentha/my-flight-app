@@ -249,9 +249,10 @@ var FLIGHTS = {
 };
 
 // ============================================================
-// WEATHER SIMULATION
+// WEATHER — Open-Meteo (real data)
 // ============================================================
 function simWeather(lat) {
+  // Fallback if API fails
   var mo = new Date().getMonth();
   var winter = (mo >= 10 || mo <= 2);
   var med = (lat < 45 && lat > 35);
@@ -263,7 +264,82 @@ function simWeather(lat) {
   var cL = Math.min(100, Math.max(0, Math.round(cb + (Math.random() - 0.5) * 40)));
   var cM = Math.min(100, Math.max(0, Math.round(cb * 0.7 + (Math.random() - 0.5) * 30)));
   var cH = Math.min(100, Math.max(0, Math.round(cb * 0.4 + (Math.random() - 0.5) * 25)));
-  return {temp:temp, ws:ws, wd:wd, cL:cL, cM:cM, cH:cH};
+  return {temp:temp, ws:ws, wd:wd, cL:cL, cM:cM, cH:cH, real:false};
+}
+
+async function fetchWeather(lat, lon) {
+  try {
+    // Get current hour for indexing hourly data
+    var now = new Date();
+    var hour = now.getUTCHours();
+
+    var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon
+      + '&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover'
+      + '&hourly=cloud_cover_1000hPa,cloud_cover_925hPa,cloud_cover_850hPa,cloud_cover_700hPa,cloud_cover_600hPa,cloud_cover_500hPa,cloud_cover_400hPa,cloud_cover_300hPa,cloud_cover_250hPa,cloud_cover_200hPa'
+      + '&forecast_days=1&timezone=UTC';
+    var r = await fetch(url);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var d = await r.json();
+    var c = d.current;
+    var h = d.hourly;
+
+    // Build vertical cloud profile from pressure levels
+    // Each level: {hPa, altM (approx meters), altFt (approx feet), cover %}
+    var profile = [
+      {hPa:1000, altM:100,   altFt:300,    cover: h.cloud_cover_1000hPa[hour]},
+      {hPa:925,  altM:750,   altFt:2500,   cover: h.cloud_cover_925hPa[hour]},
+      {hPa:850,  altM:1500,  altFt:5000,   cover: h.cloud_cover_850hPa[hour]},
+      {hPa:700,  altM:3000,  altFt:10000,  cover: h.cloud_cover_700hPa[hour]},
+      {hPa:600,  altM:4200,  altFt:14000,  cover: h.cloud_cover_600hPa[hour]},
+      {hPa:500,  altM:5500,  altFt:18000,  cover: h.cloud_cover_500hPa[hour]},
+      {hPa:400,  altM:7200,  altFt:24000,  cover: h.cloud_cover_400hPa[hour]},
+      {hPa:300,  altM:9200,  altFt:30000,  cover: h.cloud_cover_300hPa[hour]},
+      {hPa:250,  altM:10400, altFt:34000,  cover: h.cloud_cover_250hPa[hour]},
+      {hPa:200,  altM:11800, altFt:39000,  cover: h.cloud_cover_200hPa[hour]}
+    ];
+
+    // Derive low/mid/high for legacy compatibility
+    var cL = Math.max(profile[0].cover, profile[1].cover, profile[2].cover);
+    var cM = Math.max(profile[3].cover, profile[4].cover, profile[5].cover);
+    var cH = Math.max(profile[6].cover, profile[7].cover, profile[8].cover, profile[9].cover);
+
+    return {
+      temp: Math.round(c.temperature_2m),
+      ws: Math.round(c.wind_speed_10m),
+      wd: Math.round(c.wind_direction_10m),
+      cL: Math.round(cL),
+      cM: Math.round(cM),
+      cH: Math.round(cH),
+      profile: profile,
+      real: true
+    };
+  } catch(e) {
+    console.log('Weather API error for', lat, lon, e);
+    return simWeather(lat);
+  }
+}
+
+async function fetchRouteWeather(fAP, tAP) {
+  // Fetch weather for 8 points along the route: origin, 6 intermediate, destination
+  var points = [];
+  for (var i = 0; i <= 7; i++) {
+    var frac = i / 7;
+    var lat = fAP.lat + (tAP.lat - fAP.lat) * frac;
+    var lon = fAP.lon + (tAP.lon - fAP.lon) * frac;
+    points.push({frac: frac, lat: lat, lon: lon});
+  }
+  // Fetch all in parallel
+  var promises = points.map(function(p) { return fetchWeather(p.lat, p.lon); });
+  var results = await Promise.all(promises);
+  var routeW = [];
+  for (var j = 0; j < points.length; j++) {
+    routeW.push({frac: points[j].frac, w: results[j]});
+  }
+  return {
+    origin: results[0],
+    destination: results[results.length - 1],
+    route: routeW
+  };
 }
 
 // ============================================================
@@ -296,23 +372,28 @@ function climbAlt(min, crM, climbMin) {
 // ============================================================
 // BRIEFING BUILDER
 // ============================================================
-function makeBriefing(fl, fAP, tAP, seat, acCode) {
+function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
   var ac = AC[acCode] || AC[fl.ac] || AC['A320'];
   var cruiseFL = fl.fl || 360;
   var crM = ftToM(cruiseFL * 100);
   var dur = fl.dur;
   var climbMin = climbMinutes(cruiseFL);
 
-  // Simulate weather at origin & destination
-  var oW = simWeather(fAP.lat);
-  var dW = simWeather(tAP.lat);
+  // Use real weather data or fallback to simulated
+  var oW = weatherData ? weatherData.origin : simWeather(fAP.lat);
+  var dW = weatherData ? weatherData.destination : simWeather(tAP.lat);
+  var isRealWeather = weatherData && oW.real;
 
-  // Sample cloud along route (7 points)
+  // Route clouds from real data or simulated
   var routeClouds = [];
-  for (var i = 0; i <= 6; i++) {
-    var frac = i / 6;
-    var lat = fAP.lat + (tAP.lat - fAP.lat) * frac;
-    routeClouds.push({frac: frac, w: simWeather(lat)});
+  if (weatherData && weatherData.route) {
+    routeClouds = weatherData.route;
+  } else {
+    for (var i = 0; i <= 6; i++) {
+      var frac = i / 6;
+      var lat = fAP.lat + (tAP.lat - fAP.lat) * frac;
+      routeClouds.push({frac: frac, w: simWeather(lat)});
+    }
   }
 
   var depR = fAP.dep(oW.wd, oW.ws);
@@ -322,39 +403,112 @@ function makeBriefing(fl, fAP, tAP, seat, acCode) {
   // FIX #1: Get turn direction
   var tDir = turnDir(depR.h, rHdg);
 
-  // Cloud events
-  var cEvents = [];
-  var wasIn = false;
-  for (var j = 0; j < routeClouds.length; j++) {
-    var rc = routeClouds[j];
-    var min = Math.round(rc.frac * dur);
-    var altM;
-    if (min < climbMin) altM = climbAlt(min, crM, climbMin);
-    else if (min > dur - 18) altM = climbAlt(dur - min, crM, climbMin);
-    else altM = crM;
-
-    var inNow = false, cTy = '';
-    if (altM < 2000 && rc.w.cL > 50) { inNow = true; cTy = 'baja'; }
-    else if (altM >= 2000 && altM < 6000 && rc.w.cM > 50) { inNow = true; cTy = 'media'; }
-    else if (altM >= 6000 && altM < 10000 && rc.w.cH > 50) { inNow = true; cTy = 'alta'; }
-
-    if (inNow && !wasIn) { cEvents.push({t:'in', min:min, alt:Math.round(altM), ty:cTy}); wasIn = true; }
-    else if (!inNow && wasIn) { cEvents.push({t:'out', min:min, alt:Math.round(altM)}); wasIn = false; }
+  // ---- CLOUD LAYERS from vertical profile ----
+  // We use origin profile for climb and destination profile for descent
+  // For each, detect contiguous cloud layers (cover > 30%)
+  function detectCloudLayers(profile) {
+    if (!profile) return [];
+    var layers = [];
+    var inCloud = false;
+    var base = 0, top = 0, maxCov = 0;
+    for (var i = 0; i < profile.length; i++) {
+      var p = profile[i];
+      if (p.cover > 30) {
+        if (!inCloud) {
+          inCloud = true;
+          base = p.altM;
+          maxCov = p.cover;
+        }
+        top = p.altM;
+        if (p.cover > maxCov) maxCov = p.cover;
+      } else {
+        if (inCloud) {
+          layers.push({baseM: base, topM: top, baseFt: Math.round(base*3.281), topFt: Math.round(top*3.281), maxCover: maxCov, thick: (maxCov > 60)});
+          inCloud = false;
+        }
+      }
+    }
+    if (inCloud) {
+      layers.push({baseM: base, topM: top, baseFt: Math.round(base*3.281), topFt: Math.round(top*3.281), maxCover: maxCov, thick: (maxCov > 60)});
+    }
+    return layers;
   }
 
-  // Destination cloud ceiling
-  var dcAlt = null;
-  if (dW.cL > 40) dcAlt = 1500;
-  else if (dW.cM > 40) dcAlt = 4000;
-  var dcMinB = dcAlt ? Math.round(dcAlt / 280) : null;
-  var dcMinE = dcAlt && dW.cL > 40 ? Math.round(450 / 280) : null;
+  var originLayers = detectCloudLayers(oW.profile);
+  var destLayers = detectCloudLayers(dW.profile);
 
-  // FIX #3: Cloud description for destination
-  var dcDesc = '';
-  if (dW.cL > 50) {
-    dcDesc = 'El cielo está completamente cubierto entre ' + (dcAlt + 1500) + ' y ' + dcAlt + ' metros. Esto significa que por la ventanilla vas a ver blanco durante unos ' + (dcMinB - (dcMinE||1)) + ' minutos.';
-  } else if (dW.cL > 20) {
-    dcDesc = 'El cielo está parcialmente cubierto, lo que significa que entrarás y saldrás de nubes durante unos ' + (dcMinB - (dcMinE||1)) + ' minutos.';
+  // Convert cloud layers to timeline events during climb (origin) and descent (dest)
+  // Climb: altitude as function of time
+  function altAtMin(min) {
+    if (min <= 0) return 0;
+    if (min < climbMin) return climbAlt(min, crM, climbMin);
+    if (min > dur - 18) {
+      var descMin = dur - min;
+      return climbAlt(descMin, crM, climbMin);
+    }
+    return crM;
+  }
+  function minAtAlt(altM, phase) {
+    // phase: 'climb' or 'descent'
+    if (phase === 'climb') {
+      // Inverse of climbAlt: altM = crM * (1 - (1 - min/climbMin)^2)
+      // => min = climbMin * (1 - sqrt(1 - altM/crM))
+      var ratio = altM / crM;
+      if (ratio >= 1) return climbMin;
+      return Math.round(climbMin * (1 - Math.sqrt(1 - ratio)));
+    } else {
+      // Descent: mirror of climb, starts at dur-18
+      var ratio2 = altM / crM;
+      if (ratio2 >= 1) return dur - 18;
+      var descTime = climbMin * (1 - Math.sqrt(1 - ratio2));
+      return Math.round(dur - descTime);
+    }
+  }
+
+  var cEvents = [];
+  // Climb cloud events from origin
+  for (var ol = 0; ol < originLayers.length; ol++) {
+    var lay = originLayers[ol];
+    if (lay.topM < crM) { // Only layers below cruise
+      var enterMin = minAtAlt(lay.baseM, 'climb');
+      var exitMin = minAtAlt(lay.topM, 'climb');
+      if (enterMin < climbMin && exitMin > 0) {
+        var desc = lay.thick ? 'Capa densa' : 'Capa parcial';
+        cEvents.push({t:'in', min:enterMin, alt:lay.baseM, topAlt:lay.topM, cover:lay.maxCover, thick:lay.thick,
+          desc: desc + ' (' + lay.maxCover + '%) entre ' + lay.baseM.toLocaleString() + 'm y ' + lay.topM.toLocaleString() + 'm.'});
+        cEvents.push({t:'out', min:exitMin, alt:lay.topM});
+      }
+    }
+  }
+
+  // Route cloud events (mid-cruise) from sampled route points
+  // Check if any route point has significant cloud at cruise altitude
+  var routeTurb = false;
+  for (var rp = 0; rp < routeClouds.length; rp++) {
+    var rc = routeClouds[rp];
+    if (rc.w.profile) {
+      for (var pl = 0; pl < rc.w.profile.length; pl++) {
+        var pLevel = rc.w.profile[pl];
+        if (pLevel.altM >= crM - 1500 && pLevel.altM <= crM + 1500 && pLevel.cover > 40) {
+          routeTurb = true;
+          break;
+        }
+      }
+    }
+    if (routeTurb) break;
+  }
+
+  // Destination cloud layers for descent
+  var dcEvents = [];
+  for (var dl = 0; dl < destLayers.length; dl++) {
+    var dlay = destLayers[dl];
+    if (dlay.topM < crM) {
+      var dEnterMin = minAtAlt(dlay.topM, 'descent');
+      var dExitMin = minAtAlt(dlay.baseM, 'descent');
+      if (dEnterMin < dur && dExitMin > dur - 18) {
+        dcEvents.push({enterMin: dur - dEnterMin, exitMin: dur - dExitMin, baseM: dlay.baseM, topM: dlay.topM, cover: dlay.maxCover, thick: dlay.thick});
+      }
+    }
   }
 
   // ---- TU VUELO timeline ----
@@ -364,13 +518,22 @@ function makeBriefing(fl, fAP, tAP, seat, acCode) {
   // FIX #1: Turn with left/right direction
   tlV.push({min:2,icon:'✈️',c:'acc',title:'Viraje hacia ' + card(rHdg) + ' (' + tDir + ')',desc:'El avión gira suavemente hacia la ' + tDir + ', rumbo a ' + tAP.city + '.',re:''});
 
+  // Climb cloud events
   for (var k = 0; k < cEvents.length; k++) {
     var ce = cEvents[k];
     if (ce.t === 'in') {
-      tlV.push({min:ce.min,icon:'☁️',c:'cld',title:'Entras en las nubes',desc:'Capa ' + ce.ty + ' a ' + ce.alt.toLocaleString() + 'm. La ventanilla se pone blanca — es vapor de agua.',re:'Las nubes son solo agua condensada. El avión las atraviesa sin problema.'});
+      var cloudNarr = ce.thick
+        ? 'Capa densa (' + ce.cover + '%) entre ' + ce.alt.toLocaleString() + 'm y ' + ce.topAlt.toLocaleString() + 'm. La ventanilla se pone blanca — es vapor de agua.'
+        : 'Capa parcial (' + ce.cover + '%) entre ' + ce.alt.toLocaleString() + 'm y ' + ce.topAlt.toLocaleString() + 'm. Entrarás y saldrás de nubes.';
+      tlV.push({min:ce.min,icon:'☁️',c:'cld',title:'Entras en nubes (' + ce.alt.toLocaleString() + 'm)',desc:cloudNarr,re:'Las nubes son solo agua condensada. El avión las atraviesa sin problema.'});
     } else {
-      tlV.push({min:ce.min,icon:'☀️',c:'ok',title:'Sales de las nubes',desc:'Cielo despejado. Altitud: ' + ce.alt.toLocaleString() + 'm.',re:''});
+      tlV.push({min:ce.min,icon:'☀️',c:'ok',title:'Sales de las nubes (' + ce.alt.toLocaleString() + 'm)',desc:'Cielo despejado.',re:''});
     }
+  }
+
+  // If there are route clouds near cruise altitude
+  if (routeTurb) {
+    tlV.push({min:climbMin + 5,icon:'☁️',c:'cld',title:'Nubes a nivel de crucero',desc:'Hay nubes cerca de la altitud de crucero en parte de la ruta. Posible turbulencia ligera.',re:'La turbulencia en nubes altas es generalmente suave. El avión está diseñado para soportarla sin problema.'});
   }
 
   // FIX #2 & #4: Generic cruise altitude, correct climb time
@@ -378,13 +541,16 @@ function makeBriefing(fl, fAP, tAP, seat, acCode) {
   if (dur > 90) tlV.push({min:Math.round(dur*0.35),icon:'🍽️',c:'acc',title:'Servicio a bordo',desc:'Momento para relajarte y disfrutar.',re:''});
   tlV.push({min:dur-22,icon:'📢',c:'acc',title:'Inicio del descenso',desc:'Los motores suenan más bajo — pasan a reposo. Es la forma normal de descender.',re:''});
 
-  if (dcMinB) {
-    // FIX #3: Better cloud description
-    var cloudNarr = dW.cL > 50
-      ? 'Cielo cubierto a ' + dcAlt.toLocaleString() + 'm sobre ' + tAP.city + '. Verás blanco por la ventanilla durante unos ' + (dcMinB - (dcMinE||1)) + ' minutos.'
-      : 'Cielo parcialmente cubierto sobre ' + tAP.city + '. Entrarás y saldrás de nubes durante unos ' + (dcMinB - (dcMinE||1)) + ' minutos.';
-    tlV.push({min:dur-dcMinB,icon:'☁️',c:'cld',title:'Nubes en el descenso',desc:cloudNarr,re:'Los pilotos usan instrumentos de precisión para aterrizar con seguridad incluso sin ver la pista.'});
-    if (dcMinE) tlV.push({min:dur-dcMinE,icon:'👁️',c:'ok',title:'Ves el suelo',desc:'Sales de la nube y ves la pista acercándose.',re:''});
+  // Descent cloud events from destination layers
+  for (var dc = 0; dc < dcEvents.length; dc++) {
+    var dce = dcEvents[dc];
+    var descCloudNarr = dce.thick
+      ? 'Capa densa (' + dce.cover + '%) entre ' + dce.topM.toLocaleString() + 'm y ' + dce.baseM.toLocaleString() + 'm sobre ' + tAP.city + '. Verás blanco por la ventanilla.'
+      : 'Capa parcial sobre ' + tAP.city + ' entre ' + dce.topM.toLocaleString() + 'm y ' + dce.baseM.toLocaleString() + 'm. Entrarás y saldrás de nubes.';
+    tlV.push({min:dur - dce.enterMin,icon:'☁️',c:'cld',title:'Nubes en descenso (' + dce.topM.toLocaleString() + 'm)',desc:descCloudNarr,re:'Los pilotos usan instrumentos de precisión para aterrizar con seguridad incluso sin ver la pista.'});
+    if (dce.baseM > 200) {
+      tlV.push({min:dur - dce.exitMin,icon:'👁️',c:'ok',title:'Sales de las nubes (' + dce.baseM.toLocaleString() + 'm)',desc:'Ves el suelo y la pista acercándose.',re:''});
+    }
   }
 
   tlV.push({min:dur,icon:'🛬',c:'ok',title:'Aterrizaje — pista ' + arrR.id,desc:'Touchdown en ' + tAP.city + '. Luego ~' + tAP.taxi + ' min rodando a terminal.',re:''});
@@ -418,9 +584,22 @@ function makeBriefing(fl, fAP, tAP, seat, acCode) {
   var narr = 'Vas a despegar probablemente por la <span class="hi">pista ' + depR.id + '</span> con dirección ' + card(depR.h) + '.';
   narr += ' A los dos minutos, el avión girará suavemente hacia la <span class="hi">' + tDir + '</span> (' + card(rHdg) + '), rumbo a ' + tAP.city + '.';
 
-  if (cEvents.length >= 2) {
-    narr += '<br><br>Sobre el <span class="hc">minuto ' + cEvents[0].min + ' entrarás en una capa de nubes</span> (' + cEvents[0].ty + ', a ' + cEvents[0].alt.toLocaleString() + 'm). La ventanilla se pondrá blanca — es solo vapor de agua. <span class="hc">Saldrás a los ' + cEvents[1].min + ' minutos</span> al superar los ' + cEvents[1].alt.toLocaleString() + 'm.';
-  } else if (cEvents.length === 0) {
+  // Climb cloud narrative from layers
+  if (originLayers.length > 0) {
+    narr += '<br><br>';
+    for (var nl = 0; nl < originLayers.length; nl++) {
+      var nlay = originLayers[nl];
+      var enterT = minAtAlt(nlay.baseM, 'climb');
+      var exitT = minAtAlt(nlay.topM, 'climb');
+      if (nl > 0) narr += ' ';
+      if (nlay.thick) {
+        narr += 'Sobre el <span class="hc">minuto ' + enterT + ' entrarás en una capa densa de nubes</span> (' + nlay.maxCover + '%, entre ' + nlay.baseM.toLocaleString() + 'm y ' + nlay.topM.toLocaleString() + 'm). La ventanilla se pondrá blanca — es solo vapor de agua.';
+      } else {
+        narr += 'Sobre el <span class="hc">minuto ' + enterT + ' cruzarás nubes parciales</span> (' + nlay.maxCover + '%, entre ' + nlay.baseM.toLocaleString() + 'm y ' + nlay.topM.toLocaleString() + 'm). Entrarás y saldrás de nubes.';
+      }
+      narr += ' <span class="hc">Saldrás sobre el minuto ' + exitT + '</span>.';
+    }
+  } else {
     narr += '<br><br><span class="hg">No hay nubes significativas en la subida</span> — verás el paisaje durante todo el ascenso.';
   }
 
@@ -428,14 +607,17 @@ function makeBriefing(fl, fAP, tAP, seat, acCode) {
   narr += '<br><br>En crucero (los aviones comerciales vuelan entre <span class="hi">FL300 y FL400</span>, entre 9.000 y 12.000 metros) tendrás <span class="hg">una fase larga, estable y tranquila</span>. El piloto automático controla el avión.';
 
   narr += '<br><br>Para aterrizar en ' + tAP.city;
-  if (dcMinB) {
-    // FIX #3: Better cloud description in narrative
-    if (dW.cL > 50) {
-      narr += ', el <span class="hc">cielo está completamente cubierto a ' + dcAlt.toLocaleString() + 'm</span>. Verás blanco por la ventanilla durante unos ' + (dcMinB - (dcMinE||1)) + ' minutos';
-    } else {
-      narr += ', el <span class="hc">cielo está parcialmente cubierto</span>. Entrarás y saldrás de nubes durante unos ' + (dcMinB - (dcMinE||1)) + ' minutos';
+  if (destLayers.length > 0) {
+    narr += ', hay nubes:';
+    for (var ndl = 0; ndl < destLayers.length; ndl++) {
+      var ndlay = destLayers[ndl];
+      if (ndlay.thick) {
+        narr += ' <span class="hc">capa densa (' + ndlay.maxCover + '%) entre ' + ndlay.topM.toLocaleString() + 'm y ' + ndlay.baseM.toLocaleString() + 'm</span>';
+      } else {
+        narr += ' <span class="hc">nubes parciales entre ' + ndlay.topM.toLocaleString() + 'm y ' + ndlay.baseM.toLocaleString() + 'm</span>';
+      }
+      if (ndl < destLayers.length - 1) narr += ',';
     }
-    if (dcMinE) narr += ', y <span class="hc">saldrás cuando falten ~' + dcMinE + ' minutos</span> para tocar pista';
     narr += '. Los pilotos tienen instrumentos para aterrizar con precisión incluso sin ver la pista.';
   } else {
     narr += ' <span class="hg">el cielo está bastante despejado</span> — podrás ver la aproximación completa.';
@@ -451,7 +633,18 @@ function makeBriefing(fl, fAP, tAP, seat, acCode) {
     sN = 'Estás en el <span class="hi">lado ' + side + '</span>. Durante crucero tendrás vistas hacia el <span class="hi">' + vD + '</span>.';
   }
 
-  return {tlV:tlV, tlA:tlA, narr:narr, sN:sN, ac:ac, oW:oW, dW:dW, depR:depR, arrR:arrR, dur:dur, fAP:fAP, tAP:tAP, fl:fl};
+  // Format departure/arrival times
+  var depTimeStr = null, arrTimeStr = null;
+  if (fl.depTime) {
+    var dt = new Date(fl.depTime.replace(/[+-]\d{2}:\d{2}$/, ''));
+    depTimeStr = ('0'+dt.getUTCHours()).slice(-2) + ':' + ('0'+dt.getUTCMinutes()).slice(-2);
+  }
+  if (fl.arrTime) {
+    var at = new Date(fl.arrTime.replace(/[+-]\d{2}:\d{2}$/, ''));
+    arrTimeStr = ('0'+at.getUTCHours()).slice(-2) + ':' + ('0'+at.getUTCMinutes()).slice(-2);
+  }
+
+  return {tlV:tlV, tlA:tlA, narr:narr, sN:sN, ac:ac, oW:oW, dW:dW, depR:depR, arrR:arrR, dur:dur, fAP:fAP, tAP:tAP, fl:fl, isRealWeather:isRealWeather, depTimeStr:depTimeStr, arrTimeStr:arrTimeStr};
 }
 
 // ============================================================
@@ -493,11 +686,25 @@ function renderBriefing(b) {
   h += '<div class="route-sub">' + b.fAP.name + ' → ' + b.tAP.name + ' · ' + b.ac.n + '</div></div>';
   h += '<span class="badge">' + code + '</span></div>';
 
-  // FIX #5: Duration box at the top
-  h += '<div class="dur-box fi"><span class="dur-label">Duración media del vuelo</span><span class="dur-val">' + Math.floor(b.dur/60) + 'h ' + (b.dur%60) + 'min</span></div>';
+  // FIX #5: Duration box with departure/arrival times
+  h += '<div class="dur-box fi">';
+  if (b.depTimeStr && b.arrTimeStr) {
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+    h += '<div style="text-align:left"><div style="font-size:22px;font-weight:700;color:#e2e8f0">' + b.depTimeStr + '</div><div style="font-size:12px;color:#7a8ba8">' + b.fl.from + ' · hora local</div></div>';
+    h += '<div style="text-align:center;flex:1;padding:0 12px"><div style="border-top:1px dashed #334155;position:relative;top:0"><span style="position:relative;top:-10px;background:#0f172a;padding:0 8px;font-size:13px;color:#94a3b8">✈️ ' + Math.floor(b.dur/60) + 'h ' + (b.dur%60) + 'min</span></div></div>';
+    h += '<div style="text-align:right"><div style="font-size:22px;font-weight:700;color:#e2e8f0">' + b.arrTimeStr + '</div><div style="font-size:12px;color:#7a8ba8">' + b.fl.to + ' · hora local</div></div>';
+    h += '</div>';
+  } else {
+    h += '<span class="dur-label">Duración media del vuelo</span><span class="dur-val">' + Math.floor(b.dur/60) + 'h ' + (b.dur%60) + 'min</span>';
+  }
+  h += '</div>';
 
-  // Badge
-  h += '<div class="live fi"><span class="live-dot"></span> Datos meteorológicos simulados</div>';
+  // Badge - real or simulated weather
+  if (b.isRealWeather) {
+    h += '<div class="live fi"><span class="live-dot"></span> Datos meteorológicos en tiempo real (Open-Meteo)</div>';
+  } else {
+    h += '<div class="live fi" style="background:rgba(251,191,36,.1);border-color:rgba(251,191,36,.2)"><span class="live-dot" style="background:#fbbf24"></span> <span style="color:#fbbf24">Datos meteorológicos simulados</span></div>';
+  }
 
   // Tabs
   h += '<div class="tabs fi"><button class="tab on" id="tab0">✈️ Tu vuelo</button><button class="tab" id="tab1">📖 Lo que siempre pasa</button></div>';
@@ -510,14 +717,24 @@ function renderBriefing(b) {
   // Narrative
   h += '<div class="card"><div class="card-title">✅ Tu briefing</div><div class="narr">' + b.narr + '</div></div>';
 
-  // Cloud visual
-  h += '<div class="card"><div class="card-title">☁️ Nubes en ' + b.fAP.city + '</div>';
+  // Cloud visual — vertical profile (like Windy meteogram)
+  h += '<div class="card"><div class="card-title">☁️ Perfil de nubes — ' + b.fAP.city + '</div>';
   h += '<div style="background:#0d1220;border-radius:10px;padding:16px">';
-  h += '<div class="cv-row"><span class="cv-alt">+6.000m</span><div class="cv-wrap"><div class="cv-bar ' + (b.oW.cH > 40 ? 'cv-bar-cld' : 'cv-bar-ok') + '" style="width:' + b.oW.cH + '%"></div></div><span class="cv-pct">' + b.oW.cH + '%</span></div>';
-  h += '<div class="cv-row"><span class="cv-alt">2-6.000m</span><div class="cv-wrap"><div class="cv-bar ' + (b.oW.cM > 40 ? 'cv-bar-cld' : 'cv-bar-ok') + '" style="width:' + b.oW.cM + '%"></div></div><span class="cv-pct">' + b.oW.cM + '%</span></div>';
-  h += '<div class="cv-row"><span class="cv-alt">0-2.000m</span><div class="cv-wrap"><div class="cv-bar ' + (b.oW.cL > 40 ? 'cv-bar-cld' : 'cv-bar-ok') + '" style="width:' + b.oW.cL + '%"></div></div><span class="cv-pct">' + b.oW.cL + '%</span></div>';
+  if (b.oW.profile) {
+    var profLabels = ['100m','750m','1.500m','3.000m','4.200m','5.500m','7.200m','9.200m','10.400m','11.800m'];
+    for (var pi = b.oW.profile.length - 1; pi >= 0; pi--) {
+      var pp = b.oW.profile[pi];
+      var barCol = pp.cover > 60 ? 'cv-bar-cld' : (pp.cover > 30 ? 'cv-bar-cld' : 'cv-bar-ok');
+      var opacity = pp.cover > 60 ? '' : (pp.cover > 30 ? 'opacity:.6' : '');
+      h += '<div class="cv-row"><span class="cv-alt">' + profLabels[pi] + '</span><div class="cv-wrap"><div class="cv-bar ' + barCol + '" style="width:' + pp.cover + '%;' + opacity + '"></div></div><span class="cv-pct">' + pp.cover + '%</span></div>';
+    }
+  } else {
+    h += '<div class="cv-row"><span class="cv-alt">+6.000m</span><div class="cv-wrap"><div class="cv-bar ' + (b.oW.cH > 40 ? 'cv-bar-cld' : 'cv-bar-ok') + '" style="width:' + b.oW.cH + '%"></div></div><span class="cv-pct">' + b.oW.cH + '%</span></div>';
+    h += '<div class="cv-row"><span class="cv-alt">2-6.000m</span><div class="cv-wrap"><div class="cv-bar ' + (b.oW.cM > 40 ? 'cv-bar-cld' : 'cv-bar-ok') + '" style="width:' + b.oW.cM + '%"></div></div><span class="cv-pct">' + b.oW.cM + '%</span></div>';
+    h += '<div class="cv-row"><span class="cv-alt">0-2.000m</span><div class="cv-wrap"><div class="cv-bar ' + (b.oW.cL > 40 ? 'cv-bar-cld' : 'cv-bar-ok') + '" style="width:' + b.oW.cL + '%"></div></div><span class="cv-pct">' + b.oW.cL + '%</span></div>';
+  }
   h += '</div>';
-  h += '<div style="margin-top:12px;font-size:13px;color:#7a8ba8">Tu avión cruzará entre FL300 y FL400 (~9-12km), <span class="hg">por encima de todas las capas</span>.</div>';
+  h += '<div style="margin-top:12px;font-size:13px;color:#7a8ba8">Tu avión cruzará entre FL300 y FL400 (~9-12km), <span class="hg">por encima de casi todas las capas</span>.</div>';
   h += '</div>';
 
   // Flight timeline
@@ -623,7 +840,7 @@ async function analyze() {
           else if (dur < 90) cruiseFl = 320;
           else if (dur < 150) cruiseFl = 360;
           else cruiseFl = 380;
-          fl = { al: apiData.flight.airline || code.substring(0,2), from: apiData.departure.iata, to: apiData.arrival.iata, dur: dur, ac: apiData.aircraft.type || 'A320', fl: cruiseFl };
+          fl = { al: apiData.flight.airline || code.substring(0,2), from: apiData.departure.iata, to: apiData.arrival.iata, dur: dur, ac: apiData.aircraft.type || 'A320', fl: cruiseFl, depTime: apiData.departure.scheduledLocal, arrTime: apiData.arrival.scheduledLocal, depTz: apiData.departure.timezone, arrTz: apiData.arrival.timezone };
           if (!AP[fl.from] && apiData.departure.lat) {
             AP[fl.from] = { name: apiData.departure.name, city: apiData.departure.name, lat: apiData.departure.lat, lon: apiData.departure.lon, taxi: 10, dep: function(wd,ws){ if(ws<5)return{id:'01',h:10}; if(wd>=315||wd<45)return{id:'36',h:360}; if(wd>=45&&wd<135)return{id:'09',h:90}; if(wd>=135&&wd<225)return{id:'18',h:180}; return{id:'27',h:270}; }, arr: function(wd,ws){ if(ws<5)return{id:'01',h:10}; if(wd>=315||wd<45)return{id:'36',h:360}; if(wd>=45&&wd<135)return{id:'09',h:90}; if(wd>=135&&wd<225)return{id:'18',h:180}; return{id:'27',h:270}; } };
           }
@@ -650,17 +867,35 @@ async function analyze() {
   showScr('S2', 'S1', 'f');
 
   var steps = ['st1','st2','st3','st4','st5'];
-  for (var i = 0; i < steps.length; i++) {
-    if (i > 0) {
-      document.getElementById(steps[i-1]).className = 'step ok';
-    }
-    document.getElementById(steps[i]).className = 'step on';
-    await delay(500 + Math.random() * 400);
-  }
-  document.getElementById(steps[4]).className = 'step ok';
-  await delay(300);
+  // Step 1: flight found
+  document.getElementById(steps[0]).className = 'step on';
+  await delay(400);
+  document.getElementById(steps[0]).className = 'step ok';
 
-  var briefing = makeBriefing(fl, fAP, tAP, seat, acCode);
+  // Step 2 & 3: fetch real weather (in parallel with animation)
+  document.getElementById(steps[1]).className = 'step on';
+  var weatherData = null;
+  try {
+    weatherData = await fetchRouteWeather(fAP, tAP);
+  } catch(e) { console.log('Weather fetch failed, using simulated', e); }
+  document.getElementById(steps[1]).className = 'step ok';
+
+  document.getElementById(steps[2]).className = 'step on';
+  await delay(400);
+  document.getElementById(steps[2]).className = 'step ok';
+
+  // Step 4: predict runway
+  document.getElementById(steps[3]).className = 'step on';
+  await delay(400);
+  document.getElementById(steps[3]).className = 'step ok';
+
+  // Step 5: build briefing
+  document.getElementById(steps[4]).className = 'step on';
+  await delay(300);
+  document.getElementById(steps[4]).className = 'step ok';
+  await delay(200);
+
+  var briefing = makeBriefing(fl, fAP, tAP, seat, acCode, weatherData);
   renderBriefing(briefing);
   showScr('S3', 'S2', 'f');
 }
