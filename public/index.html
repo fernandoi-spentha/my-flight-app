@@ -1,1603 +1,613 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>MyFlight</title>
-    <style>
-    * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-        -webkit-tap-highlight-color: transparent
-    }
-
-    html, body {
-        height: 100%;
-        overflow: hidden
-    }
-
-    body {
-        font-family: -apple-system, system-ui, 'Helvetica Neue', sans-serif;
-        background: #0a0e1a;
-        color: #e8edf5;
-        -webkit-font-smoothing: antialiased;
-    }
-
-    .app {
-        height: 100%;
-        width: 100%;
-        max-width: 430px;
-        margin: 0 auto;
-        position: relative;
-        overflow: hidden
-    }/* Screens */
-    .scr {
-        position: absolute;
-        inset: 0;
-        overflow-y: auto;
-        overflow-x: hidden;
-        padding: 20px;
-        padding-top: calc(env(safe-area-inset-top, 0px) + 20px);
-        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
-        -webkit-overflow-scrolling: touch;
-        transition: transform .4s ease, opacity .4s ease
-    }
-
-    .scr::-webkit-scrollbar {
-        width: 0
-    }
-
-    .scr.off-r {
-        transform: translateX(100%);
-        opacity: 0;
-        pointer-events: none
-    }
-
-    .scr.off-l {
-        transform: translateX(-30%);
-        opacity: 0;
-        pointer-events: none
-    }/* Search screen */
-    .search {
-        display: flex;
-        flex-direction: column;
-        padding-top: calc(env(safe-area-inset-top, 0px) + 60px)
-    }
-
-    .logo {
-        text-align: center;
-        margin-bottom: 48px
-    }
-
-    .logo-box {
-        width: 72px;
-        height: 72px;
-        margin: 0 auto 20px;
-        background: linear-gradient(135deg, #4e9eff, #7c3aed);
-        border-radius: 22px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 8px 32px rgba(78, 158, 255, .25)
-    }
-
-    .logo-box svg {
-        width: 38px;
-        height: 38px;
-        fill: #fff
-    }
-
-    .logo h1 {
-        font-size: 32px;
-        font-weight: 700;
-        letter-spacing: -.5px;
-        margin-bottom: 8px
-    }
-
-    .logo p {
-        font-size: 15px;
-        color: #7a8ba8;
-        line-height: 1.5;
-        max-width: 280px;
-        margin: 0 auto
-    }
-
-    .field-group {
-        margin-bottom: 16px
-    }
-
-    .field-label {
-        display: block;
-        font-size: 12px;
-        font-weight: 600;
-        color: #7a8ba8;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin-bottom: 8px
-    }
-
-    .field {
-        width: 100%;
-        padding: 16px 18px;
-        background: #0d1220;
-        border: 1.5px solid rgba(78, 158, 255, .1);
-        border-radius: 10px;
-        color: #e8edf5;
-        font-family: 'SF Mono', Menlo, monospace;
-        font-size: 18px;
-        letter-spacing: 2px;
-        outline: none;
-        transition: border-color .2s, box-shadow .2s
-    }
-
-    .field::placeholder {
-        color: #4a5873;
-        letter-spacing: 1px;
-        font-size: 15px
-    }
-
-    .field:focus {
-        border-color: #4e9eff;
-        box-shadow: 0 0 0 4px rgba(78, 158, 255, .15)
-    }
-
-    .field-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px
-    }
-
-    .field-date {
-        font-family: -apple-system, sans-serif;
-        font-size: 15px;
-        letter-spacing: 0
-    }
-
-    .field-seat {
-        letter-spacing: 1px
-    }
-
-    .select {
-        width: 100%;
-        padding: 16px 18px;
-        background: #0d1220;
-        border: 1.5px solid rgba(78, 158, 255, .1);
-        border-radius: 10px;
-        color: #e8edf5;
-        font-family: -apple-system, sans-serif;
-        font-size: 15px;
-        outline: none;
-        -webkit-appearance: none;
-        appearance: none;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%237a8ba8' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
-        background-repeat: no-repeat;
-        background-position: right 16px center
-    }
-
-    .select:focus {
-        border-color: #4e9eff;
-        box-shadow: 0 0 0 4px rgba(78, 158, 255, .15)
-    }
-
-    .btn {
-        width: 100%;
-        padding: 18px;
-        background: linear-gradient(135deg, #4e9eff, #3b82f6);
-        color: #fff;
-        border: none;
-        border-radius: 10px;
-        font-family: -apple-system, sans-serif;
-        font-size: 16px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: transform .15s
-    }
-
-    .btn:active {
-        transform: scale(.97)
-    }
-
-    .examples {
-        margin-top: auto
-    }
-
-    .examples-title {
-        font-size: 12px;
-        font-weight: 600;
-        color: #4a5873;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin-bottom: 12px
-    }
-
-    .chips {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px
-    }
-
-    .chip {
-        padding: 10px 16px;
-        background: #131829;
-        border: 1px solid rgba(78, 158, 255, .1);
-        border-radius: 100px;
-        color: #7a8ba8;
-        font-family: 'SF Mono', Menlo, monospace;
-        font-size: 13px;
-        cursor: pointer
-    }
-
-    .chip:active {
-        background: #1a2035;
-        color: #4e9eff
-    }/* Loading */
-    .loading {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        text-align: center;
-        gap: 32px
-    }
-
-    .spinner {
-        width: 64px;
-        height: 64px;
-        border: 3px solid rgba(78, 158, 255, .1);
-        border-top-color: #4e9eff;
-        border-radius: 50%;
-        animation: spin 1s linear infinite
-    }
-
-    @keyframes spin {
-        to {
-            transform: rotate(360deg)
-        }
-    }
-
-    .steps {
-        display: flex;
-        flex-direction: column;
-        gap: 14px;
-        width: 100%;
-        max-width: 280px
-    }
-
-    .step {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        font-size: 14px;
-        color: #4a5873;
-        transition: color .4s
-    }
-
-    .step.on {
-        color: #e8edf5
-    }
-
-    .step.ok {
-        color: #34d399
-    }
-
-    .step-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: #4a5873;
-        flex-shrink: 0;
-        transition: all .4s
-    }
-
-    .step.on .step-dot {
-        background: #4e9eff;
-        box-shadow: 0 0 8px #4e9eff
-    }
-
-    .step.ok .step-dot {
-        background: #34d399
-    }/* Briefing */
-    .brief {
-        padding-top: calc(env(safe-area-inset-top, 0px) + 16px)
-    }
-
-    .header {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 20px
-    }
-
-    .back {
-        width: 40px;
-        height: 40px;
-        border-radius: 12px;
-        background: #131829;
-        border: 1px solid rgba(78, 158, 255, .1);
-        color: #7a8ba8;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        flex-shrink: 0
-    }
-
-    .back:active {
-        background: #1a2035;
-        color: #4e9eff
-    }
-
-    .route {
-        flex: 1
-    }
-
-    .route-codes {
-        font-size: 22px;
-        font-weight: 700
-    }
-
-    .route-arrow {
-        color: #4a5873;
-        margin: 0 6px;
-        font-weight: 400
-    }
-
-    .route-sub {
-        font-size: 13px;
-        color: #7a8ba8;
-        margin-top: 3px
-    }
-
-    .badge {
-        padding: 6px 14px;
-        background: rgba(78, 158, 255, .08);
-        border: 1px solid rgba(78, 158, 255, .2);
-        border-radius: 100px;
-        font-family: 'SF Mono', Menlo, monospace;
-        font-size: 13px;
-        color: #4e9eff;
-        font-weight: 500
-    }
-
-    .live {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 4px 10px;
-        background: rgba(52, 211, 153, .1);
-        border: 1px solid rgba(52, 211, 153, .2);
-        border-radius: 100px;
-        font-size: 11px;
-        color: #34d399;
-        font-weight: 500;
-        margin-bottom: 16px
-    }
-
-    .live-dot {
-        width: 6px;
-        height: 6px;
-        background: #34d399;
-        border-radius: 50%;
-        animation: pulse 2s infinite
-    }
-
-    @keyframes pulse {
-        0%, 100% {
-            opacity:1
-        }
-
-        50% {
-            opacity: .4
-        }
-    }/* Tabs */
-    .tabs {
-        display: flex;
-        gap: 4px;
-        background: #0d1220;
-        border-radius: 12px;
-        padding: 4px;
-        margin-bottom: 20px
-    }
-
-    .tab {
-        flex: 1;
-        padding: 12px 8px;
-        border: none;
-        border-radius: 10px;
-        font-family: -apple-system, sans-serif;
-        font-size: 14px;
-        font-weight: 600;
-        cursor: pointer;
-        background: transparent;
-        color: #4a5873;
-        transition: all .25s
-    }
-
-    .tab.on {
-        background: #131829;
-        color: #e8edf5;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, .3)
-    }
-
-    .pane {
-        display: none
-    }
-
-    .pane.on {
-        display: block
-    }/* Cards */
-    .card {
-        background: #131829;
-        border: 1px solid rgba(78, 158, 255, .1);
-        border-radius: 16px;
-        padding: 20px;
-        margin-bottom: 16px
-    }
-
-    .card-title {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 13px;
-        font-weight: 600;
-        color: #7a8ba8;
-        text-transform: uppercase;
-        letter-spacing: .8px;
-        margin-bottom: 14px
-    }
-
-    .narr {
-        font-size: 16px;
-        line-height: 1.75
-    }
-
-    .hc {
-        color: #a78bfa;
-        font-weight: 500
-    }
-
-    .hg {
-        color: #34d399;
-        font-weight: 500
-    }
-
-    .hw {
-        color: #fbbf24;
-        font-weight: 500
-    }
-
-    .hi {
-        color: #4e9eff;
-        font-weight: 500
-    }
-
-    .he {
-        color: #fb923c;
-        font-weight: 500
-    }/* Safety */
-    .safety {
-        background: rgba(52, 211, 153, .06);
-        border: 1px solid rgba(52, 211, 153, .15);
-        border-radius: 16px;
-        padding: 16px 20px;
-        margin-bottom: 16px;
-        display: flex;
-        align-items: flex-start;
-        gap: 12px
-    }
-
-    .safety-text {
-        font-size: 14px;
-        color: #34d399;
-        line-height: 1.6
-    }/* Timeline */
-    .tl-item {
-        display: flex;
-        gap: 14px;
-        padding-bottom: 20px;
-        position: relative
-    }
-
-    .tl-item:last-child {
-        padding-bottom: 0
-    }
-
-    .tl-left {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        width: 44px;
-        flex-shrink: 0
-    }
-
-    .tl-time {
-        font-family: 'SF Mono', Menlo, monospace;
-        font-size: 11px;
-        color: #4a5873;
-        margin-bottom: 8px;
-        white-space: nowrap
-    }
-
-    .tl-dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        flex-shrink: 0;
-        z-index: 1
-    }
-
-    .tl-dot-acc {
-        background: #4e9eff
-    }
-
-    .tl-dot-cld {
-        background: #a78bfa
-    }
-
-    .tl-dot-ok {
-        background: #34d399
-    }
-
-    .tl-dot-wrn {
-        background: #fbbf24
-    }
-
-    .tl-dot-ev {
-        background: #fb923c
-    }
-
-    .tl-line {
-        width: 2px;
-        flex: 1;
-        background: rgba(78, 158, 255, .1);
-        margin-top: 6px
-    }
-
-    .tl-right {
-        flex: 1
-    }
-
-    .tl-title {
-        font-size: 14px;
-        font-weight: 600;
-        margin-bottom: 4px
-    }
-
-    .tl-desc {
-        font-size: 13px;
-        color: #7a8ba8;
-        line-height: 1.5
-    }
-
-    .tl-safe {
-        font-size: 12px;
-        color: #34d399;
-        margin-top: 4px;
-        font-style: italic
-    }/* Cloud bars */
-    .cv-row {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 8px 0;
-        border-bottom: 1px solid rgba(78, 158, 255, .1)
-    }
-
-    .cv-row:last-child {
-        border-bottom: none
-    }
-
-    .cv-alt {
-        font-family: 'SF Mono', Menlo, monospace;
-        font-size: 11px;
-        color: #4a5873;
-        width: 58px;
-        text-align: right
-    }
-
-    .cv-wrap {
-        flex: 1;
-        height: 8px;
-        background: rgba(255, 255, 255, .05);
-        border-radius: 4px;
-        overflow: hidden
-    }
-
-    .cv-bar {
-        height: 100%;
-        border-radius: 4px
-    }
-
-    .cv-bar-cld {
-        background: #a78bfa
-    }
-
-    .cv-bar-ok {
-        background: #34d399
-    }
-
-    .cv-pct {
-        font-size: 12px;
-        color: #7a8ba8;
-        width: 40px
-    }/* Conditions */
-    .cond-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px
-    }
-
-    .cond-box {
-        background: #0a0e1a;
-        border-radius: 10px;
-        padding: 14px;
-        text-align: center
-    }
-
-    .cond-val {
-        font-size: 22px;
-        font-weight: 700;
-        margin-bottom: 4px
-    }
-
-    .cond-lbl {
-        font-size: 11px;
-        color: #7a8ba8;
-        text-transform: uppercase;
-        letter-spacing: .5px
-    }
-
-    .turb-bar {
-        height: 8px;
-        border-radius: 4px;
-        background: #0a0e1a;
-        overflow: hidden;
-        margin-top: 12px;
-        margin-bottom: 6px
-    }
-
-    .turb-fill {
-        height: 100%;
-        border-radius: 4px;
-        width: 20%;
-        background: #34d399
-    }
-
-    .turb-label {
-        font-size: 12px;
-        color: #7a8ba8;
-        display: flex;
-        justify-content: space-between
-    }/* Animations */
-    .fi {
-        animation: fadeUp .5s ease both
-    }
-
-    @keyframes fadeUp {
-        from {
-            opacity: 0;
-            transform:translateY(16px)
-        }
-
-        to {
-            opacity: 1;
-            transform: translateY(0)
-        }
-    }
-
-    .spacer {
-        height: 40px
-    }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>MyFlight</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden}
+body{
+  font-family:-apple-system,system-ui,'Helvetica Neue',sans-serif;
+  background:#0a0e1a;color:#e8edf5;-webkit-font-smoothing:antialiased;
+}
+.app{height:100%;width:100%;max-width:430px;margin:0 auto;position:relative;overflow:hidden}
+
+/* Screens */
+.scr{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;padding:20px;padding-top:calc(env(safe-area-inset-top,0px) + 20px);padding-bottom:calc(env(safe-area-inset-bottom,0px) + 20px);-webkit-overflow-scrolling:touch;transition:transform .4s ease,opacity .4s ease}
+.scr::-webkit-scrollbar{width:0}
+.scr.off-r{transform:translateX(100%);opacity:0;pointer-events:none}
+.scr.off-l{transform:translateX(-30%);opacity:0;pointer-events:none}
+
+/* Search screen */
+.search{display:flex;flex-direction:column;padding-top:calc(env(safe-area-inset-top,0px) + 60px)}
+.logo{text-align:center;margin-bottom:48px}
+.logo-box{width:72px;height:72px;margin:0 auto 20px;background:linear-gradient(135deg,#4e9eff,#7c3aed);border-radius:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(78,158,255,.25)}
+.logo-box svg{width:38px;height:38px;fill:#fff}
+.logo h1{font-size:32px;font-weight:700;letter-spacing:-.5px;margin-bottom:8px}
+.logo p{font-size:15px;color:#7a8ba8;line-height:1.5;max-width:280px;margin:0 auto}
+
+.field-group{margin-bottom:16px}
+.field-label{display:block;font-size:12px;font-weight:600;color:#7a8ba8;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+.field{width:100%;padding:16px 18px;background:#0d1220;border:1.5px solid rgba(78,158,255,.1);border-radius:10px;color:#e8edf5;font-family:'SF Mono',Menlo,monospace;font-size:18px;letter-spacing:2px;outline:none;transition:border-color .2s,box-shadow .2s}
+.field::placeholder{color:#4a5873;letter-spacing:1px;font-size:15px}
+.field:focus{border-color:#4e9eff;box-shadow:0 0 0 4px rgba(78,158,255,.15)}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field-date{font-family:-apple-system,sans-serif;font-size:15px;letter-spacing:0}
+.field-seat{letter-spacing:1px}
+
+.select{width:100%;padding:16px 18px;background:#0d1220;border:1.5px solid rgba(78,158,255,.1);border-radius:10px;color:#e8edf5;font-family:-apple-system,sans-serif;font-size:15px;outline:none;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%237a8ba8' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center}
+.select:focus{border-color:#4e9eff;box-shadow:0 0 0 4px rgba(78,158,255,.15)}
+
+.btn{width:100%;padding:18px;background:linear-gradient(135deg,#4e9eff,#3b82f6);color:#fff;border:none;border-radius:10px;font-family:-apple-system,sans-serif;font-size:16px;font-weight:600;cursor:pointer;transition:transform .15s}
+.btn:active{transform:scale(.97)}
+
+.examples{margin-top:auto}
+.examples-title{font-size:12px;font-weight:600;color:#4a5873;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:10px 16px;background:#131829;border:1px solid rgba(78,158,255,.1);border-radius:100px;color:#7a8ba8;font-family:'SF Mono',Menlo,monospace;font-size:13px;cursor:pointer}
+.chip:active{background:#1a2035;color:#4e9eff}
+
+/* Loading */
+.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:32px}
+.spinner{width:64px;height:64px;border:3px solid rgba(78,158,255,.1);border-top-color:#4e9eff;border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.steps{display:flex;flex-direction:column;gap:14px;width:100%;max-width:280px}
+.step{display:flex;align-items:center;gap:12px;font-size:14px;color:#4a5873;transition:color .4s}
+.step.on{color:#e8edf5}
+.step.ok{color:#34d399}
+.step-dot{width:8px;height:8px;border-radius:50%;background:#4a5873;flex-shrink:0;transition:all .4s}
+.step.on .step-dot{background:#4e9eff;box-shadow:0 0 8px #4e9eff}
+.step.ok .step-dot{background:#34d399}
+
+/* Briefing */
+.brief{padding-top:calc(env(safe-area-inset-top,0px) + 16px)}
+.header{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.back{width:40px;height:40px;border-radius:12px;background:#131829;border:1px solid rgba(78,158,255,.1);color:#7a8ba8;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+.back:active{background:#1a2035;color:#4e9eff}
+.route{flex:1}
+.route-codes{font-size:22px;font-weight:700}
+.route-arrow{color:#4a5873;margin:0 6px;font-weight:400}
+.route-sub{font-size:13px;color:#7a8ba8;margin-top:3px}
+.badge{padding:6px 14px;background:rgba(78,158,255,.08);border:1px solid rgba(78,158,255,.2);border-radius:100px;font-family:'SF Mono',Menlo,monospace;font-size:13px;color:#4e9eff;font-weight:500}
+
+.live{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.2);border-radius:100px;font-size:11px;color:#34d399;font-weight:500;margin-bottom:16px}
+.live-dot{width:6px;height:6px;background:#34d399;border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* Tabs */
+.tabs{display:flex;gap:4px;background:#0d1220;border-radius:12px;padding:4px;margin-bottom:20px}
+.tab{flex:1;padding:12px 8px;border:none;border-radius:10px;font-family:-apple-system,sans-serif;font-size:14px;font-weight:600;cursor:pointer;background:transparent;color:#4a5873;transition:all .25s}
+.tab.on{background:#131829;color:#e8edf5;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.pane{display:none}
+.pane.on{display:block}
+
+/* Cards */
+.card{background:#131829;border:1px solid rgba(78,158,255,.1);border-radius:16px;padding:20px;margin-bottom:16px}
+.card-title{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:#7a8ba8;text-transform:uppercase;letter-spacing:.8px;margin-bottom:14px}
+.narr{font-size:16px;line-height:1.75}
+
+.hc{color:#a78bfa;font-weight:500}
+.hg{color:#34d399;font-weight:500}
+.hw{color:#fbbf24;font-weight:500}
+.hi{color:#4e9eff;font-weight:500}
+.he{color:#fb923c;font-weight:500}
+
+/* Safety */
+.safety{background:rgba(52,211,153,.06);border:1px solid rgba(52,211,153,.15);border-radius:16px;padding:16px 20px;margin-bottom:16px;display:flex;align-items:flex-start;gap:12px}
+.safety-text{font-size:14px;color:#34d399;line-height:1.6}
+
+/* Duration box */
+.dur-box{background:#0d1220;border-radius:12px;padding:16px 20px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between}
+.dur-label{font-size:13px;color:#7a8ba8;text-transform:uppercase;letter-spacing:.5px}
+.dur-val{font-size:22px;font-weight:700;color:#4e9eff}
+
+/* Timeline */
+.tl-item{display:flex;gap:14px;padding-bottom:20px;position:relative}
+.tl-item:last-child{padding-bottom:0}
+.tl-left{display:flex;flex-direction:column;align-items:center;width:44px;flex-shrink:0}
+.tl-time{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:#4a5873;margin-bottom:8px;white-space:nowrap}
+.tl-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;z-index:1}
+.tl-dot-acc{background:#4e9eff}
+.tl-dot-cld{background:#a78bfa}
+.tl-dot-ok{background:#34d399}
+.tl-dot-wrn{background:#fbbf24}
+.tl-dot-ev{background:#fb923c}
+.tl-line{width:2px;flex:1;background:rgba(78,158,255,.1);margin-top:6px}
+.tl-right{flex:1}
+.tl-title{font-size:14px;font-weight:600;margin-bottom:4px}
+.tl-desc{font-size:13px;color:#7a8ba8;line-height:1.5}
+.tl-safe{font-size:12px;color:#34d399;margin-top:4px;font-style:italic}
+
+/* Cloud bars */
+.cv-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid rgba(78,158,255,.1)}
+.cv-row:last-child{border-bottom:none}
+.cv-alt{font-family:'SF Mono',Menlo,monospace;font-size:11px;color:#4a5873;width:58px;text-align:right}
+.cv-wrap{flex:1;height:8px;background:rgba(255,255,255,.05);border-radius:4px;overflow:hidden}
+.cv-bar{height:100%;border-radius:4px}
+.cv-bar-cld{background:#a78bfa}
+.cv-bar-ok{background:#34d399}
+.cv-pct{font-size:12px;color:#7a8ba8;width:40px}
+
+/* Conditions */
+.cond-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cond-box{background:#0a0e1a;border-radius:10px;padding:14px;text-align:center}
+.cond-val{font-size:22px;font-weight:700;margin-bottom:4px}
+.cond-lbl{font-size:11px;color:#7a8ba8;text-transform:uppercase;letter-spacing:.5px}
+.turb-bar{height:8px;border-radius:4px;background:#0a0e1a;overflow:hidden;margin-top:12px;margin-bottom:6px}
+.turb-fill{height:100%;border-radius:4px;width:20%;background:#34d399}
+.turb-label{font-size:12px;color:#7a8ba8;display:flex;justify-content:space-between}
+
+/* Animations */
+.fi{animation:fadeUp .5s ease both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+
+.spacer{height:40px}
+</style>
 </head>
 <body>
-    <div class="app">
+<div class="app">
 
-        <!-- ====== SEARCH ====== -->
-        <div id="S1" class="scr search">
-            <div class="logo">
-                <div class="logo-box">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M21 16v-2l-8-5V3.5A1.5 1.5 0 0 0 11.5 2 1.5 1.5 0 0 0 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
-                    </svg>
-                </div>
-                <h1>MyFlight</h1>
-                <p>Tu copiloto narrativo. Sabe lo que vas a sentir antes de despegar.</p>
-            </div>
-            <div>
-                <div class="field-group">
-                    <label class="field-label">Número de vuelo</label>
-                    <input id="inFlight" class="field" type="text" placeholder="Ej: IB3170" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false">
-                </div>
-                <div class="field-row">
-                    <div class="field-group">
-                        <label class="field-label">Fecha</label>
-                        <input id="inDate" class="field field-date" type="date">
-                    </div>
-                    <div class="field-group">
-                        <label class="field-label">Tu asiento</label>
-                        <input id="inSeat" class="field field-seat" type="text" placeholder="Ej: 14A" maxlength="4" autocapitalize="characters">
-                    </div>
-                </div>
-                <div class="field-group">
-                    <label class="field-label">Tipo de avión</label>
-                    <select id="inAC" class="select">
-                        <option value="auto">Automático</option>
-                        <option value="A320">Airbus A320</option>
-                        <option value="A321">Airbus A321</option>
-                        <option value="A320neo">Airbus A320neo</option>
-                        <option value="B738">Boeing 737-800</option>
-                        <option value="B38M">Boeing 737 MAX</option>
-                        <option value="E190">Embraer E190</option>
-                    </select>
-                </div>
-                <div style="height:16px"></div>
-                <button class="btn" id="btnGo">Analizar mi vuelo</button>
-            </div>
-            <div class="examples" style="margin-top:32px">
-                <div class="examples-title">Prueba con un ejemplo</div>
-                <div class="chips">
-                    <span class="chip" data-f="IB3170" data-s="14A">IB3170 MAD→FCO</span>
-                    <span class="chip" data-f="VY1001" data-s="12F">VY1001 BCN→MAD</span>
-                    <span class="chip" data-f="BA456" data-s="22A">BA456 LHR→MAD</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- ====== LOADING ====== -->
-        <div id="S2" class="scr loading off-r">
-            <div class="spinner"></div>
-            <div style="font-size:18px;font-weight:600">Analizando tu vuelo</div>
-            <div class="steps">
-                <div class="step" id="st1">
-                    <span class="step-dot"></span>
-                    Buscando ruta y horarios
-                </div>
-                <div class="step" id="st2">
-                    <span class="step-dot"></span>
-                    Consultando capas de nubes
-                </div>
-                <div class="step" id="st3">
-                    <span class="step-dot"></span>
-                    Analizando viento y condiciones
-                </div>
-                <div class="step" id="st4">
-                    <span class="step-dot"></span>
-                    Prediciendo pista y aproximación
-                </div>
-                <div class="step" id="st5">
-                    <span class="step-dot"></span>
-                    Preparando tu briefing
-                </div>
-            </div>
-        </div>
-
-        <!-- ====== BRIEFING ====== -->
-        <div id="S3" class="scr brief off-r">
-            <div id="OUT"></div>
-            <div class="spacer"></div>
-        </div>
-
+<!-- ====== SEARCH ====== -->
+<div id="S1" class="scr search">
+  <div class="logo">
+    <div class="logo-box"><svg viewBox="0 0 24 24"><path d="M21 16v-2l-8-5V3.5A1.5 1.5 0 0 0 11.5 2 1.5 1.5 0 0 0 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg></div>
+    <h1>MyFlight</h1>
+    <p>Tu copiloto narrativo. Sabe lo que vas a sentir antes de despegar.</p>
+  </div>
+  <div>
+    <div class="field-group"><label class="field-label">Número de vuelo</label><input id="inFlight" class="field" type="text" placeholder="Ej: IB3170" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false"></div>
+    <div class="field-row">
+      <div class="field-group"><label class="field-label">Fecha</label><input id="inDate" class="field field-date" type="date"></div>
+      <div class="field-group"><label class="field-label">Tu asiento</label><input id="inSeat" class="field field-seat" type="text" placeholder="Ej: 14A" maxlength="4" autocapitalize="characters"></div>
     </div>
-    <script>
-    // ============================================================
-    // DATA
-    // ============================================================
-    var AP = {
-        MAD: {
-            name: "Madrid Barajas",
-            city: "Madrid",
-            lat: 40.4722,
-            lon: -3.5608,
-            taxi: 12,
-            dep: function(wd, ws) {
-                return (wd > 90 && wd < 270 && ws > 8) ? {
-                    id: "14L",
-                    h: 144
-                } : {
-                    id: "36L",
-                    h: 3
-                };
-            },
-            arr: function(wd, ws) {
-                return (wd > 90 && wd < 270 && ws > 8) ? {
-                    id: "18R",
-                    h: 183
-                } : {
-                    id: "32L",
-                    h: 324
-                };
-            }
-        },
-        BCN: {
-            name: "Barcelona El Prat",
-            city: "Barcelona",
-            lat: 41.2974,
-            lon: 2.0833,
-            taxi: 8,
-            dep: function(wd, ws) {
-                return ((wd > 180 && wd < 360) || wd < 10) ? {
-                    id: "07R",
-                    h: 74
-                } : {
-                    id: "25L",
-                    h: 254
-                };
-            },
-            arr: function(wd, ws) {
-                return ((wd > 180 && wd < 360) || wd < 10) ? {
-                    id: "07L",
-                    h: 70
-                } : {
-                    id: "25R",
-                    h: 250
-                };
-            }
-        },
-        FCO: {
-            name: "Roma Fiumicino",
-            city: "Roma",
-            lat: 41.8003,
-            lon: 12.2389,
-            taxi: 10,
-            dep: function(wd, ws) {
-                return (wd > 270 || wd < 90) ? {
-                    id: "34L",
-                    h: 343
-                } : {
-                    id: "16R",
-                    h: 163
-                };
-            },
-            arr: function(wd, ws) {
-                return (wd > 270 || wd < 90) ? {
-                    id: "34R",
-                    h: 343
-                } : {
-                    id: "16L",
-                    h: 163
-                };
-            }
-        },
-        LHR: {
-            name: "London Heathrow",
-            city: "Londres",
-            lat: 51.47,
-            lon: -0.4543,
-            taxi: 15,
-            dep: function(wd, ws) {
-                return (wd > 180 && wd < 360) ? {
-                    id: "09R",
-                    h: 92
-                } : {
-                    id: "27L",
-                    h: 272
-                };
-            },
-            arr: function(wd, ws) {
-                return (wd > 180 && wd < 360) ? {
-                    id: "09L",
-                    h: 92
-                } : {
-                    id: "27R",
-                    h: 272
-                };
-            }
-        },
-        STN: {
-            name: "London Stansted",
-            city: "Londres",
-            lat: 51.885,
-            lon: 0.235,
-            taxi: 7,
-            dep: function(wd, ws) {
-                return (wd > 100 && wd < 280) ? {
-                    id: "22",
-                    h: 220
-                } : {
-                    id: "04",
-                    h: 40
-                };
-            },
-            arr: function(wd, ws) {
-                return (wd > 100 && wd < 280) ? {
-                    id: "22",
-                    h: 220
-                } : {
-                    id: "04",
-                    h: 40
-                };
-            }
-        },
-        LIS: {
-            name: "Lisboa Portela",
-            city: "Lisboa",
-            lat: 38.7756,
-            lon: -9.1354,
-            taxi: 8,
-            dep: function(wd, ws) {
-                return (wd > 120 && wd < 300) ? {
-                    id: "21",
-                    h: 210
-                } : {
-                    id: "03",
-                    h: 30
-                };
-            },
-            arr: function(wd, ws) {
-                return (wd > 120 && wd < 300) ? {
-                    id: "21",
-                    h: 210
-                } : {
-                    id: "03",
-                    h: 30
-                };
-            }
-        },
-    };
+    <div class="field-group"><label class="field-label">Tipo de avión</label>
+      <select id="inAC" class="select">
+        <option value="auto">Automático</option>
+        <option value="A320">Airbus A320</option><option value="A321">Airbus A321</option>
+        <option value="A320neo">Airbus A320neo</option><option value="B738">Boeing 737-800</option>
+        <option value="B38M">Boeing 737 MAX</option><option value="E190">Embraer E190</option>
+      </select>
+    </div>
+    <div style="height:16px"></div>
+    <button class="btn" id="btnGo">Analizar mi vuelo</button>
+  </div>
+  <div class="examples" style="margin-top:32px">
+    <div class="examples-title">Prueba con un ejemplo</div>
+    <div class="chips">
+      <span class="chip" data-f="IB3170" data-s="14A">IB3170 MAD→FCO</span>
+      <span class="chip" data-f="VY1001" data-s="12F">VY1001 BCN→MAD</span>
+      <span class="chip" data-f="BA456" data-s="22A">BA456 LHR→MAD</span>
+    </div>
+  </div>
+</div>
 
-    var AC = {
-        A320: {
-            n: "Airbus A320",
-            bark: true
-        },
-        A321: {
-            n: "Airbus A321",
-            bark: true
-        },
-        A320neo: {
-            n: "Airbus A320neo",
-            bark: true
-        },
-        A319: {
-            n: "Airbus A319",
-            bark: true
-        },
-        B738: {
-            n: "Boeing 737-800",
-            bark: false
-        },
-        B38M: {
-            n: "Boeing 737 MAX",
-            bark: false
-        },
-        E190: {
-            n: "Embraer E190",
-            bark: false
-        },
-    };
+<!-- ====== LOADING ====== -->
+<div id="S2" class="scr loading off-r">
+  <div class="spinner"></div>
+  <div style="font-size:18px;font-weight:600">Analizando tu vuelo</div>
+  <div class="steps">
+    <div class="step" id="st1"><span class="step-dot"></span>Buscando ruta y horarios</div>
+    <div class="step" id="st2"><span class="step-dot"></span>Consultando capas de nubes</div>
+    <div class="step" id="st3"><span class="step-dot"></span>Analizando viento y condiciones</div>
+    <div class="step" id="st4"><span class="step-dot"></span>Prediciendo pista y aproximación</div>
+    <div class="step" id="st5"><span class="step-dot"></span>Preparando tu briefing</div>
+  </div>
+</div>
 
-    var FLIGHTS = {
-        IB3170: {
-            al: "Iberia",
-            from: "MAD",
-            to: "FCO",
-            dur: 155,
-            ac: "A321",
-            fl: 360
-        },
-        VY1001: {
-            al: "Vueling",
-            from: "BCN",
-            to: "MAD",
-            dur: 75,
-            ac: "A320",
-            fl: 340
-        },
-        BA456: {
-            al: "British Airways",
-            from: "LHR",
-            to: "MAD",
-            dur: 145,
-            ac: "A320",
-            fl: 370
-        },
-        FR5994: {
-            al: "Ryanair",
-            from: "STN",
-            to: "MAD",
-            dur: 150,
-            ac: "B738",
-            fl: 360
-        },
-        IB3100: {
-            al: "Iberia",
-            from: "MAD",
-            to: "LHR",
-            dur: 155,
-            ac: "A321",
-            fl: 380
-        },
-        TP1024: {
-            al: "TAP",
-            from: "LIS",
-            to: "MAD",
-            dur: 75,
-            ac: "A320neo",
-            fl: 320
-        },
-    };
+<!-- ====== BRIEFING ====== -->
+<div id="S3" class="scr brief off-r">
+  <div id="OUT"></div>
+  <div class="spacer"></div>
+</div>
 
-    // ============================================================
-    // WEATHER SIMULATION
-    // ============================================================
-    function simWeather(lat) {
-        var mo = new Date().getMonth();
-        var winter = (mo >= 10 || mo <= 2);
-        var med = (lat < 45 && lat > 35);
-        var base = med ? (winter ? 12 : 28) : (winter ? 6 : 21);
-        var temp = base + Math.round((Math.random() - 0.5) * 6);
-        var ws = 5 + Math.round(Math.random() * 18);
-        var wd = Math.round(Math.random() * 360);
-        var cb = med ? (winter ? 40 : 15) : (winter ? 55 : 30);
-        var cL = Math.min(100, Math.max(0, Math.round(cb + (Math.random() - 0.5) * 40)));
-        var cM = Math.min(100, Math.max(0, Math.round(cb * 0.7 + (Math.random() - 0.5) * 30)));
-        var cH = Math.min(100, Math.max(0, Math.round(cb * 0.4 + (Math.random() - 0.5) * 25)));
-        return {
-            temp: temp,
-            ws: ws,
-            wd: wd,
-            cL: cL,
-            cM: cM,
-            cH: cH
-        };
+</div>
+<script>
+// ============================================================
+// DATA
+// ============================================================
+var AP = {
+  MAD:{name:"Madrid Barajas",city:"Madrid",lat:40.4722,lon:-3.5608,taxi:12,
+    dep:function(wd,ws){return(wd>90&&wd<270&&ws>8)?{id:"14L",h:144}:{id:"36L",h:3};},
+    arr:function(wd,ws){return(wd>90&&wd<270&&ws>8)?{id:"18R",h:183}:{id:"32L",h:324};}},
+  BCN:{name:"Barcelona El Prat",city:"Barcelona",lat:41.2974,lon:2.0833,taxi:8,
+    dep:function(wd,ws){return((wd>180&&wd<360)||wd<10)?{id:"07R",h:74}:{id:"25L",h:254};},
+    arr:function(wd,ws){return((wd>180&&wd<360)||wd<10)?{id:"07L",h:70}:{id:"25R",h:250};}},
+  FCO:{name:"Roma Fiumicino",city:"Roma",lat:41.8003,lon:12.2389,taxi:10,
+    dep:function(wd,ws){return(wd>270||wd<90)?{id:"34L",h:343}:{id:"16R",h:163};},
+    arr:function(wd,ws){return(wd>270||wd<90)?{id:"34R",h:343}:{id:"16L",h:163};}},
+  LHR:{name:"London Heathrow",city:"Londres",lat:51.47,lon:-0.4543,taxi:15,
+    dep:function(wd,ws){return(wd>180&&wd<360)?{id:"09R",h:92}:{id:"27L",h:272};},
+    arr:function(wd,ws){return(wd>180&&wd<360)?{id:"09L",h:92}:{id:"27R",h:272};}},
+  STN:{name:"London Stansted",city:"Londres",lat:51.885,lon:0.235,taxi:7,
+    dep:function(wd,ws){return(wd>100&&wd<280)?{id:"22",h:220}:{id:"04",h:40};},
+    arr:function(wd,ws){return(wd>100&&wd<280)?{id:"22",h:220}:{id:"04",h:40};}},
+  LIS:{name:"Lisboa Portela",city:"Lisboa",lat:38.7756,lon:-9.1354,taxi:8,
+    dep:function(wd,ws){return(wd>120&&wd<300)?{id:"21",h:210}:{id:"03",h:30};},
+    arr:function(wd,ws){return(wd>120&&wd<300)?{id:"21",h:210}:{id:"03",h:30};}},
+};
+
+var AC = {
+  A320:{n:"Airbus A320",bark:true},A321:{n:"Airbus A321",bark:true},
+  A320neo:{n:"Airbus A320neo",bark:true},A319:{n:"Airbus A319",bark:true},
+  A330:{n:"Airbus A330",bark:true},A350:{n:"Airbus A350",bark:false},
+  B738:{n:"Boeing 737-800",bark:false},B38M:{n:"Boeing 737 MAX",bark:false},
+  B787:{n:"Boeing 787 Dreamliner",bark:false},B777:{n:"Boeing 777",bark:false},
+  E190:{n:"Embraer E190",bark:false},E195:{n:"Embraer E195",bark:false},
+  ATR:{n:"ATR 72",bark:false},CRJ:{n:"CRJ",bark:false},
+};
+
+var FLIGHTS = {
+  IB3170:{al:"Iberia",from:"MAD",to:"FCO",dur:155,ac:"A321",fl:360},
+  VY1001:{al:"Vueling",from:"BCN",to:"MAD",dur:75,ac:"A320",fl:340},
+  BA456:{al:"British Airways",from:"LHR",to:"MAD",dur:145,ac:"A320",fl:370},
+  FR5994:{al:"Ryanair",from:"STN",to:"MAD",dur:150,ac:"B738",fl:360},
+  IB3100:{al:"Iberia",from:"MAD",to:"LHR",dur:155,ac:"A321",fl:380},
+  TP1024:{al:"TAP",from:"LIS",to:"MAD",dur:75,ac:"A320neo",fl:320},
+};
+
+// ============================================================
+// WEATHER SIMULATION
+// ============================================================
+function simWeather(lat) {
+  var mo = new Date().getMonth();
+  var winter = (mo >= 10 || mo <= 2);
+  var med = (lat < 45 && lat > 35);
+  var base = med ? (winter ? 12 : 28) : (winter ? 6 : 21);
+  var temp = base + Math.round((Math.random() - 0.5) * 6);
+  var ws = 5 + Math.round(Math.random() * 18);
+  var wd = Math.round(Math.random() * 360);
+  var cb = med ? (winter ? 40 : 15) : (winter ? 55 : 30);
+  var cL = Math.min(100, Math.max(0, Math.round(cb + (Math.random() - 0.5) * 40)));
+  var cM = Math.min(100, Math.max(0, Math.round(cb * 0.7 + (Math.random() - 0.5) * 30)));
+  var cH = Math.min(100, Math.max(0, Math.round(cb * 0.4 + (Math.random() - 0.5) * 25)));
+  return {temp:temp, ws:ws, wd:wd, cL:cL, cM:cM, cH:cH};
+}
+
+// ============================================================
+// UTILS
+// ============================================================
+function card(h){var d=['norte','noreste','este','sureste','sur','suroeste','oeste','noroeste'];return d[Math.round(h/45)%8];}
+function brg(a,b,c,d){var R=Math.PI/180;var e=R*(d-b);var f=Math.sin(e)*Math.cos(R*c);var g=Math.cos(R*a)*Math.sin(R*c)-Math.sin(R*a)*Math.cos(R*c)*Math.cos(e);return((Math.atan2(f,g)*180/Math.PI)+360)%360;}
+function ftToM(f){return f*0.3048;}
+
+// FIX #1: Turn direction (izquierda/derecha)
+function turnDir(depHdg, routeHdg) {
+  var diff = ((routeHdg - depHdg) + 360) % 360;
+  return (diff <= 180) ? 'derecha' : 'izquierda';
+}
+
+// FIX #4: Realistic climb time based on cruise FL
+function climbMinutes(fl) {
+  if (fl <= 300) return 18;
+  if (fl <= 340) return 20;
+  if (fl <= 380) return 23;
+  return 25;
+}
+
+function climbAlt(min, crM, climbMin) {
+  if (min >= climbMin) return crM;
+  var p = min / climbMin;
+  return crM * (1 - Math.pow(1 - p, 2));
+}
+
+// ============================================================
+// BRIEFING BUILDER
+// ============================================================
+function makeBriefing(fl, fAP, tAP, seat, acCode) {
+  var ac = AC[acCode] || AC[fl.ac] || AC['A320'];
+  var cruiseFL = fl.fl || 360;
+  var crM = ftToM(cruiseFL * 100);
+  var dur = fl.dur;
+  var climbMin = climbMinutes(cruiseFL);
+
+  // Simulate weather at origin & destination
+  var oW = simWeather(fAP.lat);
+  var dW = simWeather(tAP.lat);
+
+  // Sample cloud along route (7 points)
+  var routeClouds = [];
+  for (var i = 0; i <= 6; i++) {
+    var frac = i / 6;
+    var lat = fAP.lat + (tAP.lat - fAP.lat) * frac;
+    routeClouds.push({frac: frac, w: simWeather(lat)});
+  }
+
+  var depR = fAP.dep(oW.wd, oW.ws);
+  var arrR = tAP.arr(dW.wd, dW.ws);
+  var rHdg = brg(fAP.lat, fAP.lon, tAP.lat, tAP.lon);
+
+  // FIX #1: Get turn direction
+  var tDir = turnDir(depR.h, rHdg);
+
+  // Cloud events
+  var cEvents = [];
+  var wasIn = false;
+  for (var j = 0; j < routeClouds.length; j++) {
+    var rc = routeClouds[j];
+    var min = Math.round(rc.frac * dur);
+    var altM;
+    if (min < climbMin) altM = climbAlt(min, crM, climbMin);
+    else if (min > dur - 18) altM = climbAlt(dur - min, crM, climbMin);
+    else altM = crM;
+
+    var inNow = false, cTy = '';
+    if (altM < 2000 && rc.w.cL > 50) { inNow = true; cTy = 'baja'; }
+    else if (altM >= 2000 && altM < 6000 && rc.w.cM > 50) { inNow = true; cTy = 'media'; }
+    else if (altM >= 6000 && altM < 10000 && rc.w.cH > 50) { inNow = true; cTy = 'alta'; }
+
+    if (inNow && !wasIn) { cEvents.push({t:'in', min:min, alt:Math.round(altM), ty:cTy}); wasIn = true; }
+    else if (!inNow && wasIn) { cEvents.push({t:'out', min:min, alt:Math.round(altM)}); wasIn = false; }
+  }
+
+  // Destination cloud ceiling
+  var dcAlt = null;
+  if (dW.cL > 40) dcAlt = 1500;
+  else if (dW.cM > 40) dcAlt = 4000;
+  var dcMinB = dcAlt ? Math.round(dcAlt / 280) : null;
+  var dcMinE = dcAlt && dW.cL > 40 ? Math.round(450 / 280) : null;
+
+  // FIX #3: Cloud description for destination
+  var dcDesc = '';
+  if (dW.cL > 50) {
+    dcDesc = 'El cielo está completamente cubierto entre ' + (dcAlt + 1500) + ' y ' + dcAlt + ' metros. Esto significa que por la ventanilla vas a ver blanco durante unos ' + (dcMinB - (dcMinE||1)) + ' minutos.';
+  } else if (dW.cL > 20) {
+    dcDesc = 'El cielo está parcialmente cubierto, lo que significa que entrarás y saldrás de nubes durante unos ' + (dcMinB - (dcMinE||1)) + ' minutos.';
+  }
+
+  // ---- TU VUELO timeline ----
+  var tlV = [];
+  tlV.push({min:0,icon:'🛫',c:'acc',title:'Despegue — pista ' + depR.id,desc:'Rumbo ' + card(depR.h) + '. El avión acelera suavemente y se levanta en 30-40 segundos.',re:''});
+
+  // FIX #1: Turn with left/right direction
+  tlV.push({min:2,icon:'✈️',c:'acc',title:'Viraje hacia ' + card(rHdg) + ' (' + tDir + ')',desc:'El avión gira suavemente hacia la ' + tDir + ', rumbo a ' + tAP.city + '.',re:''});
+
+  for (var k = 0; k < cEvents.length; k++) {
+    var ce = cEvents[k];
+    if (ce.t === 'in') {
+      tlV.push({min:ce.min,icon:'☁️',c:'cld',title:'Entras en las nubes',desc:'Capa ' + ce.ty + ' a ' + ce.alt.toLocaleString() + 'm. La ventanilla se pone blanca — es vapor de agua.',re:'Las nubes son solo agua condensada. El avión las atraviesa sin problema.'});
+    } else {
+      tlV.push({min:ce.min,icon:'☀️',c:'ok',title:'Sales de las nubes',desc:'Cielo despejado. Altitud: ' + ce.alt.toLocaleString() + 'm.',re:''});
     }
+  }
 
-    // ============================================================
-    // UTILS
-    // ============================================================
-    function card(h) {
-        var d = ['norte', 'noreste', 'este', 'sureste', 'sur', 'suroeste', 'oeste', 'noroeste'];
-        return d[Math.round(h / 45) % 8];
+  // FIX #2 & #4: Generic cruise altitude, correct climb time
+  tlV.push({min:climbMin,icon:'✈️',c:'ok',title:'Crucero',desc:'Los aviones comerciales vuelan entre FL300 y FL400 (entre 9.000 y 12.000 metros). Fase más estable y tranquila del vuelo. Piloto automático al mando.',re:''});
+  if (dur > 90) tlV.push({min:Math.round(dur*0.35),icon:'🍽️',c:'acc',title:'Servicio a bordo',desc:'Momento para relajarte y disfrutar.',re:''});
+  tlV.push({min:dur-22,icon:'📢',c:'acc',title:'Inicio del descenso',desc:'Los motores suenan más bajo — pasan a reposo. Es la forma normal de descender.',re:''});
+
+  if (dcMinB) {
+    // FIX #3: Better cloud description
+    var cloudNarr = dW.cL > 50
+      ? 'Cielo cubierto a ' + dcAlt.toLocaleString() + 'm sobre ' + tAP.city + '. Verás blanco por la ventanilla durante unos ' + (dcMinB - (dcMinE||1)) + ' minutos.'
+      : 'Cielo parcialmente cubierto sobre ' + tAP.city + '. Entrarás y saldrás de nubes durante unos ' + (dcMinB - (dcMinE||1)) + ' minutos.';
+    tlV.push({min:dur-dcMinB,icon:'☁️',c:'cld',title:'Nubes en el descenso',desc:cloudNarr,re:'Los pilotos usan instrumentos de precisión para aterrizar con seguridad incluso sin ver la pista.'});
+    if (dcMinE) tlV.push({min:dur-dcMinE,icon:'👁️',c:'ok',title:'Ves el suelo',desc:'Sales de la nube y ves la pista acercándose.',re:''});
+  }
+
+  tlV.push({min:dur,icon:'🛬',c:'ok',title:'Aterrizaje — pista ' + arrR.id,desc:'Touchdown en ' + tAP.city + '. Luego ~' + tAP.taxi + ' min rodando a terminal.',re:''});
+  tlV.sort(function(a,b){return a.min - b.min;});
+
+  // ---- LO QUE SIEMPRE PASA timeline ----
+  var tlA = [];
+  tlA.push({min:-10,icon:'🔧',c:'ev',title:'Encendido de motores',desc:'Primero se enciende el motor izquierdo, luego el derecho. Los escucharás acelerando suavemente, uno por uno.',re:'Es la secuencia estándar. Siempre se encienden en el mismo orden.'});
+  if (ac.bark) {
+    tlA.push({min:-9,icon:'🔊',c:'ev',title:'"Barking dog" — sonido hidráulico',desc:'Un sonido rítmico, parecido a un ladrido, debajo del avión. Es el sistema PTU equilibrando presión hidráulica entre los dos motores.',re:'Solo ocurre en Airbus. Desaparece cuando ambos motores están en marcha. Completamente normal.'});
+  }
+  tlA.push({min:-3,icon:'📢',c:'acc',title:'Piloto: "Tripulación, preparar para despegue"',desc:'El comandante avisa que van a entrar en pista. Las azafatas toman asiento.',re:''});
+  tlA.push({min:0,icon:'🛫',c:'acc',title:'Spool up — potencia de despegue',desc:'Los motores aceleran. Sentirás la aceleración empujándote suavemente al respaldo. En 30-40 segundos el avión se levanta.',re:'Los motores están diseñados para dar mucha más potencia de la necesaria. Siempre hay margen de sobra.'});
+  tlA.push({min:0.5,icon:'⚙️',c:'ev',title:'Gear up — las ruedas se guardan',desc:'Unos segundos después de despegar, escucharás un sonido debajo del avión. Son las ruedas recogiéndose dentro.',re:'Pasa en todos los vuelos. Dura pocos segundos.'});
+  tlA.push({min:1.5,icon:'🔊',c:'ev',title:'Spool down — motores reducen potencia',desc:'Los motores bajan de tono. No se están apagando — simplemente ya no hace falta tanta potencia. El avión sigue subiendo perfectamente.',re:'Es como levantar el pie del acelerador en una cuesta. El avión sube con menos esfuerzo del que piensas.'});
+  tlA.push({min:3,icon:'⚙️',c:'ev',title:'Flaps se recogen (progresivamente)',desc:'Las piezas del borde del ala se van recogiendo. Puede que oigas un suave zumbido. Si miras por la ventanilla, verás el ala "limpiarse".',re:'Los flaps solo se necesitan a baja velocidad. Al recogerlos, el avión vuela más eficientemente.'});
+  tlA.push({min:6,icon:'🔊',c:'ev',title:'Variaciones de potencia en ascenso',desc:'Los motores suben y bajan de intensidad. Esto es normal, sobre todo en espacios aéreos con mucho tráfico.',re:'Cada cambio es una instrucción del controlador aéreo o del piloto automático.'});
+  tlA.push({min:12,icon:'🔔',c:'ev',title:'Ding — señal en crucero',desc:'Escucharás un "ding". Dependiendo de la aerolínea, puede ser la señal de cinturones o comunicación con la tripulación.',re:'Los "dings" son el sistema de comunicación interno del avión.'});
+  tlA.push({min:13,icon:'🔊',c:'ev',title:'Spool down — potencia de crucero',desc:'Los motores se estabilizan a potencia menor. El sonido se vuelve constante y suave.',re:''});
+
+  var dM = dur > 100 ? dur - 22 : dur - 15;
+  tlA.push({min:dM,icon:'🔊',c:'ev',title:'Motores casi en reposo (idle)',desc:'Al empezar a bajar, los motores van a potencia mínima. Puede parecer que se apagan — no es así. El avión desciende planeando suavemente.',re:'Un avión puede planear decenas de kilómetros. Los motores siguen funcionando, solo a mínima potencia.'});
+  tlA.push({min:dM+8,icon:'⚙️',c:'ev',title:'Flaps y slats se extienden',desc:'Las piezas del ala se mueven hacia fuera. El avión necesita ir más lento y los flaps le ayudan.',re:''});
+  tlA.push({min:dM+10,icon:'🔊',c:'ev',title:'Ajustes de potencia en aproximación',desc:'Los motores suben y bajan durante la aproximación. El piloto ajusta la velocidad para seguir la senda de descenso perfecta.',re:''});
+  tlA.push({min:dur-5,icon:'⚙️',c:'ev',title:'Gear down — las ruedas salen',desc:'Escucharás un sonido debajo del avión — son las ruedas desplegándose para aterrizar. Dura unos segundos.',re:'Este sonido es idéntico vuelo tras vuelo. Significa que todo va según lo previsto.'});
+  tlA.push({min:dur,icon:'🛬',c:'ok',title:'Touchdown',desc:'El avión toca la pista. Escucharás la reversa de empuje (motores frenan) y verás unas placas levantarse en el ala (spoilers).',re:'Los aviones modernos aterrizan de forma casi automática.'});
+  tlA.sort(function(a,b){return a.min - b.min;});
+
+  // ---- NARRATIVE ----
+  // FIX #1: Include turn direction
+  var narr = 'Vas a despegar probablemente por la <span class="hi">pista ' + depR.id + '</span> con dirección ' + card(depR.h) + '.';
+  narr += ' A los dos minutos, el avión girará suavemente hacia la <span class="hi">' + tDir + '</span> (' + card(rHdg) + '), rumbo a ' + tAP.city + '.';
+
+  if (cEvents.length >= 2) {
+    narr += '<br><br>Sobre el <span class="hc">minuto ' + cEvents[0].min + ' entrarás en una capa de nubes</span> (' + cEvents[0].ty + ', a ' + cEvents[0].alt.toLocaleString() + 'm). La ventanilla se pondrá blanca — es solo vapor de agua. <span class="hc">Saldrás a los ' + cEvents[1].min + ' minutos</span> al superar los ' + cEvents[1].alt.toLocaleString() + 'm.';
+  } else if (cEvents.length === 0) {
+    narr += '<br><br><span class="hg">No hay nubes significativas en la subida</span> — verás el paisaje durante todo el ascenso.';
+  }
+
+  // FIX #2: Generic cruise altitude
+  narr += '<br><br>En crucero (los aviones comerciales vuelan entre <span class="hi">FL300 y FL400</span>, entre 9.000 y 12.000 metros) tendrás <span class="hg">una fase larga, estable y tranquila</span>. El piloto automático controla el avión.';
+
+  narr += '<br><br>Para aterrizar en ' + tAP.city;
+  if (dcMinB) {
+    // FIX #3: Better cloud description in narrative
+    if (dW.cL > 50) {
+      narr += ', el <span class="hc">cielo está completamente cubierto a ' + dcAlt.toLocaleString() + 'm</span>. Verás blanco por la ventanilla durante unos ' + (dcMinB - (dcMinE||1)) + ' minutos';
+    } else {
+      narr += ', el <span class="hc">cielo está parcialmente cubierto</span>. Entrarás y saldrás de nubes durante unos ' + (dcMinB - (dcMinE||1)) + ' minutos';
     }
-    function brg(a, b, c, d) {
-        var R = Math.PI / 180;
-        var e = R * (d - b);
-        var f = Math.sin(e) * Math.cos(R * c);
-        var g = Math.cos(R * a) * Math.sin(R * c) - Math.sin(R * a) * Math.cos(R * c) * Math.cos(e);
-        return ((Math.atan2(f, g) * 180 / Math.PI) + 360) % 360;
-    }
-    function ftToM(f) {
-        return f * 0.3048;
-    }
-    function climbAlt(min, cr) {
-        if (min >= 12)
-            return cr;
-        var p = min / 12;
-        return cr * (1 - Math.pow(1 - p, 2));
-    }
+    if (dcMinE) narr += ', y <span class="hc">saldrás cuando falten ~' + dcMinE + ' minutos</span> para tocar pista';
+    narr += '. Los pilotos tienen instrumentos para aterrizar con precisión incluso sin ver la pista.';
+  } else {
+    narr += ' <span class="hg">el cielo está bastante despejado</span> — podrás ver la aproximación completa.';
+  }
+  narr += ' Aterrizarás por la <span class="hi">pista ' + arrR.id + '</span>, con ~' + tAP.taxi + ' minutos de rodaje a terminal.';
 
-    // ============================================================
-    // BRIEFING BUILDER
-    // ============================================================
-    function makeBriefing(fl, fAP, tAP, seat, acCode) {
-        var ac = AC[acCode] || AC[fl.ac];
-        var crM = ftToM(fl.fl * 100);
-        var dur = fl.dur;
+  // Seat
+  var sN = '';
+  if (seat && seat.length > 0) {
+    var lc = seat.charAt(seat.length - 1).toUpperCase();
+    var side = (lc <= 'C') ? 'izquierdo' : 'derecho';
+    var vD = (side === 'izquierdo') ? card((rHdg - 90 + 360) % 360) : card((rHdg + 90) % 360);
+    sN = 'Estás en el <span class="hi">lado ' + side + '</span>. Durante crucero tendrás vistas hacia el <span class="hi">' + vD + '</span>.';
+  }
 
-        // Simulate weather at origin & destination
-        var oW = simWeather(fAP.lat);
-        var dW = simWeather(tAP.lat);
+  return {tlV:tlV, tlA:tlA, narr:narr, sN:sN, ac:ac, oW:oW, dW:dW, depR:depR, arrR:arrR, dur:dur, fAP:fAP, tAP:tAP, fl:fl};
+}
 
-        // Sample cloud along route (7 points)
-        var routeClouds = [];
-        for (var i = 0; i <= 6; i++) {
-            var frac = i / 6;
-            var lat = fAP.lat + (tAP.lat - fAP.lat) * frac;
-            routeClouds.push({
-                frac: frac,
-                w: simWeather(lat)
-            });
-        }
+// ============================================================
+// RENDER
+// ============================================================
+function renderTL(items) {
+  var h = '';
+  for (var i = 0; i < items.length; i++) {
+    var t = items[i];
+    var last = (i === items.length - 1);
+    var dotC = 'tl-dot-acc';
+    if (t.c === 'cld') dotC = 'tl-dot-cld';
+    if (t.c === 'ok') dotC = 'tl-dot-ok';
+    if (t.c === 'wrn') dotC = 'tl-dot-wrn';
+    if (t.c === 'ev') dotC = 'tl-dot-ev';
+    var titleCol = '#4e9eff';
+    if (t.c === 'cld') titleCol = '#a78bfa';
+    if (t.c === 'ok') titleCol = '#34d399';
+    if (t.c === 'wrn') titleCol = '#fbbf24';
+    if (t.c === 'ev') titleCol = '#fb923c';
+    var ml = (t.min < 0) ? Math.abs(t.min) + "' antes" : Math.round(t.min) + ' min';
 
-        var depR = fAP.dep(oW.wd, oW.ws);
-        var arrR = tAP.arr(dW.wd, dW.ws);
-        var rHdg = brg(fAP.lat, fAP.lon, tAP.lat, tAP.lon);
+    h += '<div class="tl-item"><div class="tl-left"><span class="tl-time">' + ml + '</span><span class="tl-dot ' + dotC + '"></span>' + (!last ? '<span class="tl-line"></span>' : '') + '</div>';
+    h += '<div class="tl-right"><div class="tl-title" style="color:' + titleCol + '">' + t.icon + ' ' + t.title + '</div><div class="tl-desc">' + t.desc + '</div>';
+    if (t.re) h += '<div class="tl-safe">✓ ' + t.re + '</div>';
+    h += '</div></div>';
+  }
+  return h;
+}
 
-        // Cloud events
-        var cEvents = [];
-        var wasIn = false;
-        for (var j = 0; j < routeClouds.length; j++) {
-            var rc = routeClouds[j];
-            var min = Math.round(rc.frac * dur);
-            var altM;
-            if (min < 12)
-                altM = climbAlt(min, crM);
-            else if (min > dur - 18)
-                altM = climbAlt(dur - min, crM);
-            else
-                altM = crM;
+function renderBriefing(b) {
+  var code = document.getElementById('inFlight').value;
+  var seatV = document.getElementById('inSeat').value || '—';
+  var h = '';
 
-            var inNow = false,
-                cTy = '';
-            if (altM < 2000 && rc.w.cL > 50) {
-                inNow = true;
-                cTy = 'baja';
-            }
-            else if (altM >= 2000 && altM < 6000 && rc.w.cM > 50) {
-                inNow = true;
-                cTy = 'media';
-            }
-            else if (altM >= 6000 && altM < 10000 && rc.w.cH > 50) {
-                inNow = true;
-                cTy = 'alta';
-            }
+  // Header
+  h += '<div class="header fi"><button class="back" id="btnBack"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg></button>';
+  h += '<div class="route"><div class="route-codes">' + b.fl.from + '<span class="route-arrow">→</span>' + b.fl.to + '</div>';
+  h += '<div class="route-sub">' + b.fAP.name + ' → ' + b.tAP.name + ' · ' + b.ac.n + '</div></div>';
+  h += '<span class="badge">' + code + '</span></div>';
 
-            if (inNow && !wasIn) {
-                cEvents.push({
-                    t: 'in',
-                    min: min,
-                    alt: Math.round(altM),
-                    ty: cTy
-                });
-                wasIn = true;
-            }
-            else if (!inNow && wasIn) {
-                cEvents.push({
-                    t: 'out',
-                    min: min,
-                    alt: Math.round(altM)
-                });
-                wasIn = false;
-            }
-        }
+  // FIX #5: Duration box at the top
+  h += '<div class="dur-box fi"><span class="dur-label">Duración media del vuelo</span><span class="dur-val">' + Math.floor(b.dur/60) + 'h ' + (b.dur%60) + 'min</span></div>';
 
-        // Destination cloud ceiling
-        var dcAlt = null;
-        if (dW.cL > 40)
-            dcAlt = 1500;
-        else if (dW.cM > 40)
-            dcAlt = 4000;
-        var dcMinB = dcAlt ? Math.round(dcAlt / 280) : null;
-        var dcMinE = dcAlt && dW.cL > 40 ? Math.round(450 / 280) : null;
+  // Badge
+  h += '<div class="live fi"><span class="live-dot"></span> Datos meteorológicos simulados</div>';
 
-        // ---- TU VUELO timeline ----
-        var tlV = [];
-        tlV.push({
-            min: 0,
-            icon: '🛫',
-            c: 'acc',
-            title: 'Despegue — pista ' + depR.id,
-            desc: 'Rumbo ' + card(depR.h) + '. El avión acelera suavemente y se levanta en 30-40 segundos.',
-            re: ''
-        });
-        tlV.push({
-            min: 2,
-            icon: '✈️',
-            c: 'acc',
-            title: 'Viraje hacia ' + card(rHdg),
-            desc: 'El avión gira suavemente rumbo a ' + tAP.city + '.',
-            re: ''
-        });
+  // Tabs
+  h += '<div class="tabs fi"><button class="tab on" id="tab0">✈️ Tu vuelo</button><button class="tab" id="tab1">📖 Lo que siempre pasa</button></div>';
 
-        for (var k = 0; k < cEvents.length; k++) {
-            var ce = cEvents[k];
-            if (ce.t === 'in') {
-                tlV.push({
-                    min: ce.min,
-                    icon: '☁️',
-                    c: 'cld',
-                    title: 'Entras en las nubes',
-                    desc: 'Capa ' + ce.ty + ' a ' + ce.alt.toLocaleString() + 'm. La ventanilla se pone blanca — es vapor de agua.',
-                    re: 'Las nubes son solo agua condensada. El avión las atraviesa sin problema.'
-                });
-            } else {
-                tlV.push({
-                    min: ce.min,
-                    icon: '☀️',
-                    c: 'ok',
-                    title: 'Sales de las nubes',
-                    desc: 'Cielo despejado. Altitud: ' + ce.alt.toLocaleString() + 'm.',
-                    re: ''
-                });
-            }
-        }
+  // === PANE 0: TU VUELO ===
+  h += '<div class="pane on" id="p0">';
 
-        tlV.push({
-            min: 12,
-            icon: '✈️',
-            c: 'ok',
-            title: 'Crucero — FL' + fl.fl,
-            desc: (crM / 1000).toFixed(1) + 'km de altitud. Fase más estable y tranquila. Piloto automático al mando.',
-            re: ''
-        });
-        if (dur > 90)
-            tlV.push({
-                min: Math.round(dur * 0.35),
-                icon: '🍽️',
-                c: 'acc',
-                title: 'Servicio a bordo',
-                desc: 'Momento para relajarte y disfrutar.',
-                re: ''
-            });
-        tlV.push({
-            min: dur - 22,
-            icon: '📢',
-            c: 'acc',
-            title: 'Inicio del descenso',
-            desc: 'Los motores suenan más bajo — pasan a reposo. Es la forma normal de descender.',
-            re: ''
-        });
+  // FIX #6: Safety banner REMOVED from here (moved to pane 1)
 
-        if (dcMinB) {
-            tlV.push({
-                min: dur - dcMinB,
-                icon: '☁️',
-                c: 'cld',
-                title: 'Entras en nubes (descenso)',
-                desc: 'Nubes a ' + dcAlt.toLocaleString() + 'm sobre ' + tAP.city + '. Unos ' + (dcMinB - (dcMinE || 1)) + ' minutos sin ver el suelo.',
-                re: 'Los pilotos usan instrumentos de precisión para aterrizar con seguridad incluso sin ver la pista.'
-            });
-            if (dcMinE)
-                tlV.push({
-                    min: dur - dcMinE,
-                    icon: '👁️',
-                    c: 'ok',
-                    title: 'Ves el suelo',
-                    desc: 'Sales de la nube y ves la pista acercándose.',
-                    re: ''
-                });
-        }
+  // Narrative
+  h += '<div class="card"><div class="card-title">✅ Tu briefing</div><div class="narr">' + b.narr + '</div></div>';
 
-        tlV.push({
-            min: dur,
-            icon: '🛬',
-            c: 'ok',
-            title: 'Aterrizaje — pista ' + arrR.id,
-            desc: 'Touchdown en ' + tAP.city + '. Luego ~' + tAP.taxi + ' min rodando a terminal.',
-            re: ''
-        });
-        tlV.sort(function(a, b) {
-            return a.min - b.min;
-        });
+  // Cloud visual
+  h += '<div class="card"><div class="card-title">☁️ Nubes en ' + b.fAP.city + '</div>';
+  h += '<div style="background:#0d1220;border-radius:10px;padding:16px">';
+  h += '<div class="cv-row"><span class="cv-alt">+6.000m</span><div class="cv-wrap"><div class="cv-bar ' + (b.oW.cH > 40 ? 'cv-bar-cld' : 'cv-bar-ok') + '" style="width:' + b.oW.cH + '%"></div></div><span class="cv-pct">' + b.oW.cH + '%</span></div>';
+  h += '<div class="cv-row"><span class="cv-alt">2-6.000m</span><div class="cv-wrap"><div class="cv-bar ' + (b.oW.cM > 40 ? 'cv-bar-cld' : 'cv-bar-ok') + '" style="width:' + b.oW.cM + '%"></div></div><span class="cv-pct">' + b.oW.cM + '%</span></div>';
+  h += '<div class="cv-row"><span class="cv-alt">0-2.000m</span><div class="cv-wrap"><div class="cv-bar ' + (b.oW.cL > 40 ? 'cv-bar-cld' : 'cv-bar-ok') + '" style="width:' + b.oW.cL + '%"></div></div><span class="cv-pct">' + b.oW.cL + '%</span></div>';
+  h += '</div>';
+  h += '<div style="margin-top:12px;font-size:13px;color:#7a8ba8">Tu avión cruzará entre FL300 y FL400 (~9-12km), <span class="hg">por encima de todas las capas</span>.</div>';
+  h += '</div>';
 
-        // ---- LO QUE SIEMPRE PASA timeline ----
-        var tlA = [];
-        tlA.push({
-            min: -10,
-            icon: '🔧',
-            c: 'ev',
-            title: 'Encendido de motores',
-            desc: 'Primero se enciende el motor izquierdo, luego el derecho. Los escucharás acelerando suavemente, uno por uno.',
-            re: 'Es la secuencia estándar. Siempre se encienden en el mismo orden.'
-        });
-        if (ac.bark) {
-            tlA.push({
-                min: -9,
-                icon: '🔊',
-                c: 'ev',
-                title: '"Barking dog" — sonido hidráulico',
-                desc: 'Un sonido rítmico, parecido a un ladrido, debajo del avión. Es el sistema PTU equilibrando presión hidráulica entre los dos motores.',
-                re: 'Solo ocurre en Airbus. Desaparece cuando ambos motores están en marcha. Completamente normal.'
-            });
-        }
-        tlA.push({
-            min: -3,
-            icon: '📢',
-            c: 'acc',
-            title: 'Piloto: "Tripulación, preparar para despegue"',
-            desc: 'El comandante avisa que van a entrar en pista. Las azafatas toman asiento.',
-            re: ''
-        });
-        tlA.push({
-            min: 0,
-            icon: '🛫',
-            c: 'acc',
-            title: 'Spool up — potencia de despegue',
-            desc: 'Los motores aceleran. Sentirás la aceleración empujándote suavemente al respaldo. En 30-40 segundos el avión se levanta.',
-            re: 'Los motores están diseñados para dar mucha más potencia de la necesaria. Siempre hay margen de sobra.'
-        });
-        tlA.push({
-            min: 0.5,
-            icon: '⚙️',
-            c: 'ev',
-            title: 'Gear up — las ruedas se guardan',
-            desc: 'Unos segundos después de despegar, escucharás un sonido debajo del avión. Son las ruedas recogiéndose dentro.',
-            re: 'Pasa en todos los vuelos. Dura pocos segundos.'
-        });
-        tlA.push({
-            min: 1.5,
-            icon: '🔊',
-            c: 'ev',
-            title: 'Spool down — motores reducen potencia',
-            desc: 'Los motores bajan de tono. No se están apagando — simplemente ya no hace falta tanta potencia. El avión sigue subiendo perfectamente.',
-            re: 'Es como levantar el pie del acelerador en una cuesta. El avión sube con menos esfuerzo del que piensas.'
-        });
-        tlA.push({
-            min: 3,
-            icon: '⚙️',
-            c: 'ev',
-            title: 'Flaps se recogen (progresivamente)',
-            desc: 'Las piezas del borde del ala se van recogiendo. Puede que oigas un suave zumbido. Si miras por la ventanilla, verás el ala "limpiarse".',
-            re: 'Los flaps solo se necesitan a baja velocidad. Al recogerlos, el avión vuela más eficientemente.'
-        });
-        tlA.push({
-            min: 6,
-            icon: '🔊',
-            c: 'ev',
-            title: 'Variaciones de potencia en ascenso',
-            desc: 'Los motores suben y bajan de intensidad. Esto es normal, sobre todo en espacios aéreos con mucho tráfico.',
-            re: 'Cada cambio es una instrucción del controlador aéreo o del piloto automático.'
-        });
-        tlA.push({
-            min: 12,
-            icon: '🔔',
-            c: 'ev',
-            title: 'Ding — señal en crucero',
-            desc: 'Escucharás un "ding". Dependiendo de la aerolínea, puede ser la señal de cinturones o comunicación con la tripulación.',
-            re: 'Los "dings" son el sistema de comunicación interno del avión.'
-        });
-        tlA.push({
-            min: 13,
-            icon: '🔊',
-            c: 'ev',
-            title: 'Spool down — potencia de crucero',
-            desc: 'Los motores se estabilizan a potencia menor. El sonido se vuelve constante y suave.',
-            re: ''
-        });
+  // Flight timeline
+  h += '<div class="card"><div class="card-title">🕐 Timeline de tu vuelo</div>' + renderTL(b.tlV) + '</div>';
 
-        var dM = dur > 100 ? dur - 22 : dur - 15;
-        tlA.push({
-            min: dM,
-            icon: '🔊',
-            c: 'ev',
-            title: 'Motores casi en reposo (idle)',
-            desc: 'Al empezar a bajar, los motores van a potencia mínima. Puede parecer que se apagan — no es así. El avión desciende planeando suavemente.',
-            re: 'Un avión puede planear decenas de kilómetros. Los motores siguen funcionando, solo a mínima potencia.'
-        });
-        tlA.push({
-            min: dM + 8,
-            icon: '⚙️',
-            c: 'ev',
-            title: 'Flaps y slats se extienden',
-            desc: 'Las piezas del ala se mueven hacia fuera. El avión necesita ir más lento y los flaps le ayudan.',
-            re: ''
-        });
-        tlA.push({
-            min: dM + 10,
-            icon: '🔊',
-            c: 'ev',
-            title: 'Ajustes de potencia en aproximación',
-            desc: 'Los motores suben y bajan durante la aproximación. El piloto ajusta la velocidad para seguir la senda de descenso perfecta.',
-            re: ''
-        });
-        tlA.push({
-            min: dur - 5,
-            icon: '⚙️',
-            c: 'ev',
-            title: 'Gear down — las ruedas salen',
-            desc: 'Escucharás un sonido debajo del avión — son las ruedas desplegándose para aterrizar. Dura unos segundos.',
-            re: 'Este sonido es idéntico vuelo tras vuelo. Significa que todo va según lo previsto.'
-        });
-        tlA.push({
-            min: dur,
-            icon: '🛬',
-            c: 'ok',
-            title: 'Touchdown',
-            desc: 'El avión toca la pista. Escucharás la reversa de empuje (motores frenan) y verás unas placas levantarse en el ala (spoilers).',
-            re: 'Los aviones modernos aterrizan de forma casi automática.'
-        });
-        tlA.sort(function(a, b) {
-            return a.min - b.min;
-        });
+  // Conditions
+  h += '<div class="card"><div class="card-title">🌡️ Condiciones</div>';
+  h += '<div class="cond-grid">';
+  h += '<div class="cond-box"><div class="cond-val" style="color:#34d399">' + b.oW.temp + '°C</div><div class="cond-lbl">' + b.fAP.city + ' ahora</div></div>';
+  h += '<div class="cond-box"><div class="cond-val" style="color:#4e9eff">' + b.dW.temp + '°C</div><div class="cond-lbl">' + b.tAP.city + ' llegada</div></div>';
+  h += '<div class="cond-box"><div class="cond-val">' + b.oW.ws + ' km/h</div><div class="cond-lbl">Viento ' + b.fl.from + '</div></div>';
+  h += '<div class="cond-box"><div class="cond-val">' + b.dW.ws + ' km/h</div><div class="cond-lbl">Viento ' + b.fl.to + '</div></div>';
+  h += '</div>';
+  h += '<div style="margin-top:16px"><div style="font-size:13px;font-weight:500;margin-bottom:4px">Turbulencia estimada</div>';
+  h += '<div class="turb-bar"><div class="turb-fill"></div></div>';
+  h += '<div class="turb-label"><span>Baja</span><span style="color:#34d399;font-weight:500">Vuelo tranquilo</span></div></div></div>';
 
-        // Narrative
-        var narr = 'Vas a despegar probablemente por la <span class="hi">pista ' + depR.id + '</span> con dirección ' + card(depR.h) + '.';
-        narr += ' A los dos minutos, el avión girará suavemente hacia ' + card(rHdg) + ', rumbo a ' + tAP.city + '.';
+  // Seat
+  if (b.sN) {
+    h += '<div class="card"><div class="card-title">👁️ Tu ventanilla · ' + seatV + '</div><div class="narr">' + b.sN + '</div></div>';
+  }
+  h += '</div>'; // end pane 0
 
-        if (cEvents.length >= 2) {
-            narr += '<br><br>Sobre el <span class="hc">minuto ' + cEvents[0].min + ' entrarás en una capa de nubes</span> (' + cEvents[0].ty + ', a ' + cEvents[0].alt.toLocaleString() + 'm). La ventanilla se pondrá blanca — es solo vapor de agua. <span class="hc">Saldrás a los ' + cEvents[1].min + ' minutos</span> al superar los ' + cEvents[1].alt.toLocaleString() + 'm.';
-        } else if (cEvents.length === 0) {
-            narr += '<br><br><span class="hg">No hay nubes significativas en la subida</span> — verás el paisaje durante todo el ascenso.';
-        }
+  // === PANE 1: LO QUE SIEMPRE PASA ===
+  h += '<div class="pane" id="p1">';
 
-        narr += '<br><br>En crucero a FL' + fl.fl + ' (' + (crM / 1000).toFixed(0) + 'km) tendrás <span class="hg">una fase larga, estable y tranquila</span>. El piloto automático controla el avión.';
+  // FIX #6: Safety banners in this tab
+  h += '<div class="safety"><span style="font-size:20px">🛡️</span><div class="safety-text">La aviación es el medio de transporte más seguro del mundo. Todo lo que lees aquí es completamente normal y ocurre en <strong>todos</strong> los vuelos.</div></div>';
 
-        narr += '<br><br>Para aterrizar en ' + tAP.city;
-        if (dcMinB) {
-            narr += ', hay nubes a <span class="hc">' + dcAlt.toLocaleString() + 'm</span>. Entrarás en ellas los últimos ' + dcMinB + ' minutos del descenso';
-            if (dcMinE)
-                narr += ' y <span class="hc">saldrás cuando falten ~' + dcMinE + ' minutos</span> para tocar pista';
-            narr += '. Los pilotos tienen instrumentos para aterrizar con precisión incluso sin ver la pista.';
-        } else {
-            narr += ' <span class="hg">el cielo está bastante despejado</span> — podrás ver la aproximación completa.';
-        }
-        narr += ' Aterrizarás por la <span class="hi">pista ' + arrR.id + '</span>, con ~' + tAP.taxi + ' minutos de rodaje a terminal.';
+  h += '<div class="card"><div class="card-title">🕐 Secuencia completa</div>' + renderTL(b.tlA) + '</div>';
 
-        // Seat
-        var sN = '';
-        if (seat && seat.length > 0) {
-            var lc = seat.charAt(seat.length - 1).toUpperCase();
-            var side = (lc <= 'C') ? 'izquierdo' : 'derecho';
-            var vD = (side === 'izquierdo') ? card((rHdg - 90 + 360) % 360) : card((rHdg + 90) % 360);
-            sN = 'Estás en el <span class="hi">lado ' + side + '</span>. Durante crucero tendrás vistas hacia el <span class="hi">' + vD + '</span>.';
-        }
+  // Sound guide
+  h += '<div class="card"><div class="card-title">🔊 Guía de sonidos · ' + b.ac.n + '</div><div class="narr" style="font-size:14px">';
+  if (b.ac.bark) h += '<span class="he">🔊 "Barking dog"</span> — Sonido rítmico como un ladrido. Sistema hidráulico PTU. Solo Airbus. Totalmente normal.<br><br>';
+  h += '<span class="he">⚙️ Gear</span> — Sonido mecánico al guardar o desplegar ruedas. Breve.<br><br>';
+  h += '<span class="he">⚙️ Flaps y slats</span> — Piezas del ala que se mueven. Zumbido suave.<br><br>';
+  h += '<span class="he">⚙️ Spoilers</span> — Placas en el ala al aterrizar. Las verás por la ventanilla.<br><br>';
+  h += '<span class="he">🔊 Spool up/down</span> — Motores cambiando de intensidad. Nunca se apagan en vuelo.<br><br>';
+  h += '<span class="he">🔔 Dings</span> — Comunicación entre pilotos y tripulación.';
+  h += '</div></div>';
+  h += '</div>'; // end pane 1
 
-        return {
-            tlV: tlV,
-            tlA: tlA,
-            narr: narr,
-            sN: sN,
-            ac: ac,
-            oW: oW,
-            dW: dW,
-            depR: depR,
-            arrR: arrR,
-            dur: dur,
-            fAP: fAP,
-            tAP: tAP,
-            fl: fl
-        };
-    }
+  document.getElementById('OUT').innerHTML = h;
 
-    // ============================================================
-    // RENDER
-    // ============================================================
-    function renderTL(items) {
-        var h = '';
-        for (var i = 0; i < items.length; i++) {
-            var t = items[i];
-            var last = (i === items.length - 1);
-            var dotC = 'tl-dot-acc';
-            if (t.c === 'cld')
-                dotC = 'tl-dot-cld';
-            if (t.c === 'ok')
-                dotC = 'tl-dot-ok';
-            if (t.c === 'wrn')
-                dotC = 'tl-dot-wrn';
-            if (t.c === 'ev')
-                dotC = 'tl-dot-ev';
-            var titleCol = '#4e9eff';
-            if (t.c === 'cld')
-                titleCol = '#a78bfa';
-            if (t.c === 'ok')
-                titleCol = '#34d399';
-            if (t.c === 'wrn')
-                titleCol = '#fbbf24';
-            if (t.c === 'ev')
-                titleCol = '#fb923c';
-            var ml = (t.min < 0) ? Math.abs(t.min) + "' antes" : Math.round(t.min) + ' min';
+  // Event listeners for tabs and back
+  document.getElementById('btnBack').onclick = goBack;
+  document.getElementById('tab0').onclick = function(){ switchTab(0); };
+  document.getElementById('tab1').onclick = function(){ switchTab(1); };
+}
 
-            h += '<div class="tl-item"><div class="tl-left"><span class="tl-time">' + ml + '</span><span class="tl-dot ' + dotC + '"></span>' + (!last ? '<span class="tl-line"></span>' : '') + '</div>';
-            h += '<div class="tl-right"><div class="tl-title" style="color:' + titleCol + '">' + t.icon + ' ' + t.title + '</div><div class="tl-desc">' + t.desc + '</div>';
-            if (t.re)
-                h += '<div class="tl-safe">✓ ' + t.re + '</div>';
-            h += '</div></div>';
-        }
-        return h;
-    }
+function switchTab(n) {
+  document.getElementById('tab0').className = (n === 0) ? 'tab on' : 'tab';
+  document.getElementById('tab1').className = (n === 1) ? 'tab on' : 'tab';
+  document.getElementById('p0').className = (n === 0) ? 'pane on' : 'pane';
+  document.getElementById('p1').className = (n === 1) ? 'pane on' : 'pane';
+  document.getElementById('S3').scrollTop = 0;
+}
 
-    function renderBriefing(b) {
-        var code = document.getElementById('inFlight').value;
-        var seatV = document.getElementById('inSeat').value || '—';
-        var h = '';
+// ============================================================
+// NAVIGATION
+// ============================================================
+function showScr(show, hide, dir) {
+  document.getElementById(hide).className = 'scr ' + (hide === 'S1' ? 'search' : hide === 'S2' ? 'loading' : 'brief') + (dir === 'f' ? ' off-l' : ' off-r');
+  var s = document.getElementById(show);
+  s.className = 'scr ' + (show === 'S1' ? 'search' : show === 'S2' ? 'loading' : 'brief');
+}
 
-        // Header
-        h += '<div class="header fi"><button class="back" id="btnBack"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg></button>';
-        h += '<div class="route"><div class="route-codes">' + b.fl.from + '<span class="route-arrow">→</span>' + b.fl.to + '</div>';
-        h += '<div class="route-sub">' + b.fAP.name + ' → ' + b.tAP.name + ' · ' + Math.floor(b.dur / 60) + 'h ' + (b.dur % 60) + 'min · ' + b.ac.n + '</div></div>';
-        h += '<span class="badge">' + code + '</span></div>';
+function goBack() {
+  var steps = ['st1','st2','st3','st4','st5'];
+  for (var i = 0; i < steps.length; i++) {
+    document.getElementById(steps[i]).className = 'step';
+  }
+  showScr('S1', 'S3', 'b');
+  document.getElementById('S2').className = 'scr loading off-r';
+}
 
-        // Badge
-        h += '<div class="live fi"><span class="live-dot"></span> Datos meteorológicos simulados</div>';
+function delay(ms) {
+  return new Promise(function(resolve) { setTimeout(resolve, ms); });
+}
 
-        // Tabs
-        h += '<div class="tabs fi"><button class="tab on" id="tab0">✈️ Tu vuelo</button><button class="tab" id="tab1">📖 Lo que siempre pasa</button></div>';
+async function analyze() {
+  var code = document.getElementById('inFlight').value.trim().toUpperCase();
+  var seat = document.getElementById('inSeat').value.trim().toUpperCase();
+  var acSel = document.getElementById('inAC').value;
 
-        // === PANE 0: TU VUELO ===
-        h += '<div class="pane on" id="p0">';
-        h += '<div class="safety"><span style="font-size:20px">🛡️</span><div class="safety-text">Volar es el medio de transporte más seguro. Todo lo que lees aquí es completamente normal.</div></div>';
-
-        // Narrative
-        h += '<div class="card"><div class="card-title">✅ Tu briefing</div><div class="narr">' + b.narr + '</div></div>';
-
-        // Cloud visual
-        h += '<div class="card"><div class="card-title">☁️ Nubes en ' + b.fAP.city + '</div>';
-        h += '<div style="background:#0d1220;border-radius:10px;padding:16px">';
-        h += '<div class="cv-row"><span class="cv-alt">+6.000m</span><div class="cv-wrap"><div class="cv-bar ' + (b.oW.cH > 40 ? 'cv-bar-cld' : 'cv-bar-ok') + '" style="width:' + b.oW.cH + '%"></div></div><span class="cv-pct">' + b.oW.cH + '%</span></div>';
-        h += '<div class="cv-row"><span class="cv-alt">2-6.000m</span><div class="cv-wrap"><div class="cv-bar ' + (b.oW.cM > 40 ? 'cv-bar-cld' : 'cv-bar-ok') + '" style="width:' + b.oW.cM + '%"></div></div><span class="cv-pct">' + b.oW.cM + '%</span></div>';
-        h += '<div class="cv-row"><span class="cv-alt">0-2.000m</span><div class="cv-wrap"><div class="cv-bar ' + (b.oW.cL > 40 ? 'cv-bar-cld' : 'cv-bar-ok') + '" style="width:' + b.oW.cL + '%"></div></div><span class="cv-pct">' + b.oW.cL + '%</span></div>';
-        h += '</div>';
-        h += '<div style="margin-top:12px;font-size:13px;color:#7a8ba8">Tu avión cruzará a FL' + b.fl.fl + ' (~' + (ftToM(b.fl.fl * 100) / 1000).toFixed(0) + 'km), <span class="hg">por encima de todas las capas</span>.</div>';
-        h += '</div>';
-
-        // Flight timeline
-        h += '<div class="card"><div class="card-title">🕐 Timeline de tu vuelo</div>' + renderTL(b.tlV) + '</div>';
-
-        // Conditions
-        h += '<div class="card"><div class="card-title">🌡️ Condiciones</div>';
-        h += '<div class="cond-grid">';
-        h += '<div class="cond-box"><div class="cond-val" style="color:#34d399">' + b.oW.temp + '°C</div><div class="cond-lbl">' + b.fAP.city + ' ahora</div></div>';
-        h += '<div class="cond-box"><div class="cond-val" style="color:#4e9eff">' + b.dW.temp + '°C</div><div class="cond-lbl">' + b.tAP.city + ' llegada</div></div>';
-        h += '<div class="cond-box"><div class="cond-val">' + b.oW.ws + ' km/h</div><div class="cond-lbl">Viento ' + b.fl.from + '</div></div>';
-        h += '<div class="cond-box"><div class="cond-val">' + b.dW.ws + ' km/h</div><div class="cond-lbl">Viento ' + b.fl.to + '</div></div>';
-        h += '</div>';
-        h += '<div style="margin-top:16px"><div style="font-size:13px;font-weight:500;margin-bottom:4px">Turbulencia estimada</div>';
-        h += '<div class="turb-bar"><div class="turb-fill"></div></div>';
-        h += '<div class="turb-label"><span>Baja</span><span style="color:#34d399;font-weight:500">Vuelo tranquilo</span></div></div></div>';
-
-        // Seat
-        if (b.sN) {
-            h += '<div class="card"><div class="card-title">👁️ Tu ventanilla · ' + seatV + '</div><div class="narr">' + b.sN + '</div></div>';
-        }
-        h += '</div>'; // end pane 0
-
-        // === PANE 1: LO QUE SIEMPRE PASA ===
-        h += '<div class="pane" id="p1">';
-        h += '<div class="safety"><span style="font-size:20px">🛡️</span><div class="safety-text">Estos sonidos y movimientos ocurren en <strong>todos</strong> los vuelos del mundo. Son señal de que todo funciona.</div></div>';
-        h += '<div class="card"><div class="card-title">🕐 Secuencia completa</div>' + renderTL(b.tlA) + '</div>';
-
-        // Sound guide
-        h += '<div class="card"><div class="card-title">🔊 Guía de sonidos · ' + b.ac.n + '</div><div class="narr" style="font-size:14px">';
-        if (b.ac.bark)
-            h += '<span class="he">🔊 "Barking dog"</span> — Sonido rítmico como un ladrido. Sistema hidráulico PTU. Solo Airbus. Totalmente normal.<br><br>';
-        h += '<span class="he">⚙️ Gear</span> — Sonido mecánico al guardar o desplegar ruedas. Breve.<br><br>';
-        h += '<span class="he">⚙️ Flaps y slats</span> — Piezas del ala que se mueven. Zumbido suave.<br><br>';
-        h += '<span class="he">⚙️ Spoilers</span> — Placas en el ala al aterrizar. Las verás por la ventanilla.<br><br>';
-        h += '<span class="he">🔊 Spool up/down</span> — Motores cambiando de intensidad. Nunca se apagan en vuelo.<br><br>';
-        h += '<span class="he">🔔 Dings</span> — Comunicación entre pilotos y tripulación.';
-        h += '</div></div>';
-        h += '</div>'; // end pane 1
-
-        document.getElementById('OUT').innerHTML = h;
-
-        // Event listeners for tabs and back
-        document.getElementById('btnBack').onclick = goBack;
-        document.getElementById('tab0').onclick = function() {
-            switchTab(0);
-        };
-        document.getElementById('tab1').onclick = function() {
-            switchTab(1);
-        };
-    }
-
-    function switchTab(n) {
-        document.getElementById('tab0').className = (n === 0) ? 'tab on' : 'tab';
-        document.getElementById('tab1').className = (n === 1) ? 'tab on' : 'tab';
-        document.getElementById('p0').className = (n === 0) ? 'pane on' : 'pane';
-        document.getElementById('p1').className = (n === 1) ? 'pane on' : 'pane';
-        document.getElementById('S3').scrollTop = 0;
-    }
-
-    // ============================================================
-    // NAVIGATION
-    // ============================================================
-    function showScr(show, hide, dir) {
-        document.getElementById(hide).className = 'scr ' + (hide === 'S1' ? 'search' : hide === 'S2' ? 'loading' : 'brief') + (dir === 'f' ? ' off-l' : ' off-r');
-        var s = document.getElementById(show);
-        s.className = 'scr ' + (show === 'S1' ? 'search' : show === 'S2' ? 'loading' : 'brief');
-    }
-
-    function goBack() {
-        var steps = ['st1', 'st2', 'st3', 'st4', 'st5'];
-        for (var i = 0; i < steps.length; i++) {
-            document.getElementById(steps[i]).className = 'step';
-        }
-        showScr('S1', 'S3', 'b');
-        document.getElementById('S2').className = 'scr loading off-r';
-    }
-
-    function delay(ms) {
-        return new Promise(function(resolve) {
-            setTimeout(resolve, ms);
-        });
-    }
-
-    async function analyze() {
-        var code = document.getElementById('inFlight').value.trim().toUpperCase();
-        var seat = document.getElementById('inSeat').value.trim().toUpperCase();
-        var acSel = document.getElementById('inAC').value;
-
-        if (!code) {
-            document.getElementById('inFlight').style.borderColor = '#f87171';
-            setTimeout(function() {
-                document.getElementById('inFlight').style.borderColor = '';
-            }, 1200);
-            return;
-        }
+  if (!code) {
+    document.getElementById('inFlight').style.borderColor = '#f87171';
+    setTimeout(function(){ document.getElementById('inFlight').style.borderColor = ''; }, 1200);
+    return;
+  }
 
   var fl = FLIGHTS[code];
   if (!fl) {
@@ -1632,52 +642,50 @@
     setTimeout(function(){ inp.style.borderColor = ''; inp.placeholder = 'Ej: IB3170'; }, 3000);
     return;
   }
-        var acCode = (acSel !== 'auto') ? acSel : fl.ac;
-        var fAP = AP[fl.from];
-        var tAP = AP[fl.to];
 
-        showScr('S2', 'S1', 'f');
+  var acCode = (acSel !== 'auto') ? acSel : fl.ac;
+  var fAP = AP[fl.from];
+  var tAP = AP[fl.to];
 
-        var steps = ['st1', 'st2', 'st3', 'st4', 'st5'];
-        for (var i = 0; i < steps.length; i++) {
-            if (i > 0) {
-                document.getElementById(steps[i - 1]).className = 'step ok';
-            }
-            document.getElementById(steps[i]).className = 'step on';
-            await delay(500 + Math.random() * 400);
-        }
-        document.getElementById(steps[4]).className = 'step ok';
-        await delay(300);
+  showScr('S2', 'S1', 'f');
 
-        var briefing = makeBriefing(fl, fAP, tAP, seat, acCode);
-        renderBriefing(briefing);
-        showScr('S3', 'S2', 'f');
+  var steps = ['st1','st2','st3','st4','st5'];
+  for (var i = 0; i < steps.length; i++) {
+    if (i > 0) {
+      document.getElementById(steps[i-1]).className = 'step ok';
     }
+    document.getElementById(steps[i]).className = 'step on';
+    await delay(500 + Math.random() * 400);
+  }
+  document.getElementById(steps[4]).className = 'step ok';
+  await delay(300);
 
-    // ============================================================
-    // INIT
-    // ============================================================
-    document.getElementById('inDate').value = new Date().toISOString().split('T')[0];
+  var briefing = makeBriefing(fl, fAP, tAP, seat, acCode);
+  renderBriefing(briefing);
+  showScr('S3', 'S2', 'f');
+}
 
-    document.getElementById('inFlight').addEventListener('input', function() {
-        this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    });
-    document.getElementById('inSeat').addEventListener('input', function() {
-        this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    });
+// ============================================================
+// INIT
+// ============================================================
+document.getElementById('inDate').value = new Date().toISOString().split('T')[0];
 
-    document.getElementById('btnGo').addEventListener('click', function() {
-        analyze();
-    });
+document.getElementById('inFlight').addEventListener('input', function() {
+  this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+});
+document.getElementById('inSeat').addEventListener('input', function() {
+  this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+});
 
-    var chips = document.querySelectorAll('.chip');
-    for (var c = 0; c < chips.length; c++) {
-        chips[c].addEventListener('click', function() {
-            document.getElementById('inFlight').value = this.getAttribute('data-f');
-            document.getElementById('inSeat').value = this.getAttribute('data-s') || '';
-        });
-    }
-    </script>
+document.getElementById('btnGo').addEventListener('click', function() { analyze(); });
+
+var chips = document.querySelectorAll('.chip');
+for (var c = 0; c < chips.length; c++) {
+  chips[c].addEventListener('click', function() {
+    document.getElementById('inFlight').value = this.getAttribute('data-f');
+    document.getElementById('inSeat').value = this.getAttribute('data-s') || '';
+  });
+}
+</script>
 </body>
 </html>
-
