@@ -165,7 +165,7 @@ body{
     <p style="font-size:12px;color:#4a5873;margin-top:12px;line-height:1.5;max-width:300px;margin-left:auto;margin-right:auto">Datos reales, contados desde el asiento del pasajero.</p>
   </div>
   <div>
-    <div class="field-group"><label class="field-label">Número de vuelo</label><input id="inFlight" class="field" type="text" placeholder="Ej: IB3170" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false"></div>
+    <div class="field-group"><label class="field-label">Número de vuelo</label><input id="inFlight" class="field" type="text" placeholder="Ej: IB651" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false"></div>
     <div class="field-row">
       <div class="field-group"><label class="field-label">Fecha</label><input id="inDate" class="field field-date" type="date"></div>
       <div class="field-group"><label class="field-label">Tu asiento</label><input id="inSeat" class="field field-seat" type="text" placeholder="Ej: 14A" maxlength="4" autocapitalize="characters"></div>
@@ -184,7 +184,7 @@ body{
   <div class="examples" style="margin-top:32px">
     <div class="examples-title">Prueba con un ejemplo</div>
     <div class="chips">
-      <span class="chip" data-f="IB3170" data-s="14A">IB3170 MAD→FCO</span>
+      <span class="chip" data-f="IB651" data-s="14A">IB651 MAD→FCO</span>
       <span class="chip" data-f="VY1001" data-s="12F">VY1001 BCN→MAD</span>
       <span class="chip" data-f="BA456" data-s="22A">BA456 LHR→MAD</span>
     </div>
@@ -249,7 +249,7 @@ var AC = {
 };
 
 var FLIGHTS = {
-  IB3170:{al:"Iberia",from:"MAD",to:"FCO",dur:155,ac:"A321",fl:360},
+  IB651:{al:"Iberia",from:"MAD",to:"FCO",dur:155,ac:"A321",fl:360},
   VY1001:{al:"Vueling",from:"BCN",to:"MAD",dur:75,ac:"A320",fl:340},
   BA456:{al:"British Airways",from:"LHR",to:"MAD",dur:145,ac:"A320",fl:370},
   FR5994:{al:"Ryanair",from:"STN",to:"MAD",dur:150,ac:"B738",fl:360},
@@ -286,7 +286,7 @@ async function fetchWeather(lat, lon, targetDate) {
     // Need forecast_days=2 in case flight crosses midnight
     var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon
       + '&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover'
-      + '&hourly=cloud_cover_1000hPa,cloud_cover_925hPa,cloud_cover_850hPa,cloud_cover_700hPa,cloud_cover_600hPa,cloud_cover_500hPa,cloud_cover_400hPa,cloud_cover_300hPa,cloud_cover_250hPa,cloud_cover_200hPa'
+      + '&hourly=cloud_cover_1000hPa,cloud_cover_925hPa,cloud_cover_850hPa,cloud_cover_700hPa,cloud_cover_600hPa,cloud_cover_500hPa,cloud_cover_400hPa,cloud_cover_300hPa,cloud_cover_250hPa,cloud_cover_200hPa,cape,lifted_index,windspeed_300hPa,windspeed_250hPa,windspeed_200hPa,windspeed_500hPa,windspeed_700hPa,windspeed_850hPa'
       + '&forecast_days=2&timezone=UTC';
     var r = await fetch(url);
     if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -325,6 +325,23 @@ async function fetchWeather(lat, lon, targetDate) {
     var cM = Math.max(profile[3].cover, profile[4].cover, profile[5].cover);
     var cH = Math.max(profile[6].cover, profile[7].cover, profile[8].cover, profile[9].cover);
 
+    // CAPE and wind data for turbulence estimation
+    var cape = (h.cape && h.cape[bestIdx] != null) ? h.cape[bestIdx] : 0;
+    var liftedIdx = (h.lifted_index && h.lifted_index[bestIdx] != null) ? h.lifted_index[bestIdx] : 0;
+
+    // Wind shear: difference between upper and lower level winds
+    // High shear at cruise altitude = CAT indicator
+    var ws300 = (h.windspeed_300hPa && h.windspeed_300hPa[bestIdx]) || 0;
+    var ws250 = (h.windspeed_250hPa && h.windspeed_250hPa[bestIdx]) || 0;
+    var ws200 = (h.windspeed_200hPa && h.windspeed_200hPa[bestIdx]) || 0;
+    var ws500 = (h.windspeed_500hPa && h.windspeed_500hPa[bestIdx]) || 0;
+    var ws700 = (h.windspeed_700hPa && h.windspeed_700hPa[bestIdx]) || 0;
+    var ws850 = (h.windspeed_850hPa && h.windspeed_850hPa[bestIdx]) || 0;
+    // Shear between 500hPa (5.5km) and 300hPa (9.2km) — cruise layer
+    var cruiseShear = Math.abs(ws300 - ws500);
+    // Max wind at cruise levels
+    var cruiseWind = Math.max(ws300, ws250, ws200);
+
     return {
       temp: Math.round(c.temperature_2m),
       ws: Math.round(c.wind_speed_10m),
@@ -334,7 +351,12 @@ async function fetchWeather(lat, lon, targetDate) {
       cH: Math.round(cH),
       profile: profile,
       real: true,
-      forecastHour: h.time[bestIdx]
+      forecastHour: h.time[bestIdx],
+      cape: Math.round(cape),
+      liftedIdx: Math.round(liftedIdx),
+      cruiseShear: Math.round(cruiseShear),
+      cruiseWind: Math.round(cruiseWind),
+      lowWind: Math.round(ws850)
     };
   } catch(e) {
     console.log('Weather API error for', lat, lon, e);
@@ -518,20 +540,27 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
   }
 
   // Route cloud events (mid-cruise) from sampled route points
-  // Per-phase turbulence analysis
-  var turbClimb = 0;  // 0-3 scale
+  // Per-phase turbulence analysis — now includes CAPE, wind shear, surface wind
+  var turbClimb = 0;  // 0-4 scale (0=imperceptible, 1=baja, 2=baja/media, 3=media/fuerte, 4=fuerte)
   var turbCruise = 0;
   var turbDescent = 0;
   var turbCruiseMinStart = null, turbCruiseMinEnd = null;
+  var turbReasons = {climb:[], cruise:[], descent:[]};
 
-  // Climb: check origin layers thickness
+  // Climb: check origin layers thickness + surface wind + CAPE
   for (var tc = 0; tc < originLayers.length; tc++) {
     var tcl = originLayers[tc];
     if (tcl.maxCover > 70) turbClimb = Math.max(turbClimb, 2);
     else if (tcl.maxCover > 40) turbClimb = Math.max(turbClimb, 1);
   }
+  // Surface wind at origin (>30 km/h adds turbulence in first minutes)
+  if (oW.ws > 40) { turbClimb = Math.max(turbClimb, 2); turbReasons.climb.push('viento fuerte en superficie (' + oW.ws + ' km/h)'); }
+  else if (oW.ws > 30) { turbClimb = Math.max(turbClimb, 1); turbReasons.climb.push('viento moderado en superficie (' + oW.ws + ' km/h)'); }
+  // CAPE at origin — convective instability during climb
+  if (oW.cape > 1500) { turbClimb = Math.max(turbClimb, 3); turbReasons.climb.push('alta inestabilidad convectiva (CAPE ' + oW.cape + ')'); }
+  else if (oW.cape > 800) { turbClimb = Math.max(turbClimb, 2); turbReasons.climb.push('inestabilidad convectiva moderada'); }
 
-  // Cruise: check each route point for clouds at cruise altitude
+  // Cruise: check each route point for clouds, CAPE, wind shear at cruise altitude
   for (var rp = 0; rp < routeClouds.length; rp++) {
     var rc = routeClouds[rp];
     var rpMin = Math.round(rc.frac * dur);
@@ -546,18 +575,32 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
         }
       }
     }
+    // CAPE along route — thunderstorms = strong turbulence
+    if (rc.w.cape > 2000) { turbCruise = Math.max(turbCruise, 3); if (turbReasons.cruise.indexOf('tormentas en ruta') === -1) turbReasons.cruise.push('tormentas en ruta (CAPE ' + rc.w.cape + ')'); if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
+    else if (rc.w.cape > 1000) { turbCruise = Math.max(turbCruise, 2); if (turbReasons.cruise.indexOf('convección moderada') === -1) turbReasons.cruise.push('convección moderada en ruta'); if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
+    // Wind shear — Clear Air Turbulence (CAT) indicator
+    if (rc.w.cruiseShear > 80) { turbCruise = Math.max(turbCruise, 3); if (turbReasons.cruise.indexOf('cizalladura') === -1) turbReasons.cruise.push('cizalladura fuerte a nivel de crucero'); if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
+    else if (rc.w.cruiseShear > 50) { turbCruise = Math.max(turbCruise, 2); if (turbReasons.cruise.indexOf('cizalladura') === -1) turbReasons.cruise.push('cizalladura moderada a nivel de crucero'); if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
+    // Very strong cruise winds (jet stream edges = CAT)
+    if (rc.w.cruiseWind > 150) { turbCruise = Math.max(turbCruise, 2); if (turbReasons.cruise.indexOf('jet stream') === -1) turbReasons.cruise.push('cerca del jet stream (' + rc.w.cruiseWind + ' km/h)'); }
   }
   var routeTurb = (turbCruise > 0);
 
-  // Descent: check destination layers thickness
+  // Descent: check destination layers thickness + surface wind + CAPE
   for (var td = 0; td < destLayers.length; td++) {
     var tdl = destLayers[td];
     if (tdl.maxCover > 70) turbDescent = Math.max(turbDescent, 2);
     else if (tdl.maxCover > 40) turbDescent = Math.max(turbDescent, 1);
   }
+  // Surface wind at destination
+  if (dW.ws > 40) { turbDescent = Math.max(turbDescent, 2); turbReasons.descent.push('viento fuerte en destino (' + dW.ws + ' km/h)'); }
+  else if (dW.ws > 30) { turbDescent = Math.max(turbDescent, 1); turbReasons.descent.push('viento moderado en destino (' + dW.ws + ' km/h)'); }
+  // CAPE at destination
+  if (dW.cape > 1500) { turbDescent = Math.max(turbDescent, 3); turbReasons.descent.push('alta inestabilidad convectiva en destino'); }
+  else if (dW.cape > 800) { turbDescent = Math.max(turbDescent, 2); turbReasons.descent.push('convección moderada en destino'); }
 
   var turbMax = Math.max(turbClimb, turbCruise, turbDescent);
-  var turbPhases = {climb: turbClimb, cruise: turbCruise, descent: turbDescent, max: turbMax, cruiseMinStart: turbCruiseMinStart, cruiseMinEnd: turbCruiseMinEnd};
+  var turbPhases = {climb: turbClimb, cruise: turbCruise, descent: turbDescent, max: turbMax, cruiseMinStart: turbCruiseMinStart, cruiseMinEnd: turbCruiseMinEnd, reasons: turbReasons};
 
   // Destination cloud layers for descent
   var dcEvents = [];
@@ -867,6 +910,11 @@ function renderBriefing(b) {
   h += '</div></div>';
   h += '<div style="flex:1;background:#0a0e1a;border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:#4a5873;margin-bottom:4px">Descenso</div><div style="font-size:13px;font-weight:500;color:' + turbColors[tp.descent] + '">' + turbLabels[tp.descent] + '</div></div>';
   h += '</div>';
+  // Show turbulence reasons if any
+  var allReasons = [].concat(tp.reasons.climb, tp.reasons.cruise, tp.reasons.descent);
+  if (allReasons.length > 0) {
+    h += '<div style="margin-top:8px;font-size:11px;color:#7a8ba8;line-height:1.6">Factores: ' + allReasons.join(', ') + '.</div>';
+  }
   h += '</div>';
 
   // Safety banner
@@ -1138,7 +1186,7 @@ async function analyze() {
     inp.style.borderColor = '#f87171';
     inp.value = '';
     inp.placeholder = 'Vuelo no encontrado';
-    setTimeout(function(){ inp.style.borderColor = ''; inp.placeholder = 'Ej: IB3170'; }, 3000);
+    setTimeout(function(){ inp.style.borderColor = ''; inp.placeholder = 'Ej: IB651'; }, 3000);
     return;
   }
 
