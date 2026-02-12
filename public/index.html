@@ -685,7 +685,7 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
   tl.push({min:1, icon:'🔊', c:'ev', type:'always', title:'Reducción de potencia', desc:'Entre 40 y 60 segundos después del despegue, notarás que los motores suenan menos intensos y parece que el avión deja de subir. Es completamente normal: simplemente ya no hace falta tanta potencia, y el avión sube a una tasa más lenta.'});
 
   // Turn — duration moved from briefing narrative to timeline only
-  tl.push({min:2, icon:'✈️', c:'acc', type:'flight', title:'Viraje hacia ' + card(rHdg) + ' (' + tDir + ')', desc:'El avión gira hacia la ' + tDir + '. El viraje dura aproximadamente ' + turnSec + ' segundos.'});
+  tl.push({min:2, icon:'✈️', c:'acc', type:'flight', title:'Viraje hacia rumbo ' + card(rHdg), desc:'El avión girará para tomar rumbo hacia ' + tAP.city + '. Notarás una ligera inclinación durante unos ' + turnSec + ' segundos.'});
 
   tl.push({min:3.5, icon:'⚙️', c:'ev', type:'always', title:'Retracción de flaps', desc:'Las piezas del borde del ala (flaps/slats) se recogen de forma progresiva. Puedes oír un suave zumbido. Si miras la ventanilla, verás el ala "limpiarse" (ya es una superficie plana, sin elementos que sobresalgan). Ya vuelas más rápido y no son necesarios.'});
 
@@ -725,7 +725,10 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
       cruiseTlDesc = 'Se prevé turbulencia ' + turbLabelsLC2[turbCruise] + ' en esta fase del vuelo.';
     }
     var cruiseTlTitle = 'Turbulencia prevista en crucero';
-    if (turbCruiseMinStart !== null) cruiseTlTitle += ' (min ' + turbCruiseMinStart + '-' + turbCruiseMinEnd + ')';
+    if (turbCruiseMinStart !== null) {
+      if (turbCruiseMinStart === turbCruiseMinEnd) cruiseTlTitle += ' (~min ' + turbCruiseMinStart + ')';
+      else cruiseTlTitle += ' (min ' + turbCruiseMinStart + '-' + turbCruiseMinEnd + ')';
+    }
     tl.push({min: turbCruiseMinStart || (climbMin + 5), icon:'🔔', c:'wrn', type:'flight', title:cruiseTlTitle, desc:cruiseTlDesc});
     tl.push({min:(turbCruiseMinStart || climbMin) + 1, icon:'🛡️', c:'ev', type:'always', title:'Sobre la turbulencia', desc:'Las turbulencias son incómodas pero no suponen ningún peligro para el avión. Los pilotos están tranquilos en cabina y, si pueden, adaptarán la ruta para reducir las molestias. Es importante mantener el cinturón abrochado en todo momento.'});
   } else {
@@ -765,7 +768,7 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
 
   // ---- NARRATIVE ----
   var narr = 'Vas a despegar probablemente por la <span class="hi">pista ' + depR.id + '</span> con dirección ' + card(depR.h) + '.';
-  narr += ' A los dos minutos, el avión girará hacia la <span class="hi">' + tDir + '</span> (' + card(rHdg) + ').';
+  narr += ' A los dos minutos, el avión girará para tomar rumbo hacia <span class="hi">' + tAP.city + '</span> (' + card(rHdg) + ').';
 
   // Climb cloud narrative
   if (originLayers.length > 0) {
@@ -926,7 +929,11 @@ function renderBriefing(b) {
   h += '<div style="flex:1;background:#0a0e1a;border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:#4a5873;margin-bottom:4px">Ascenso</div><div style="font-size:13px;font-weight:500;color:' + turbColors[tp.climb] + '">' + turbLabels[tp.climb] + '</div></div>';
   h += '<div style="flex:1;background:#0a0e1a;border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:#4a5873;margin-bottom:4px">Crucero</div><div style="font-size:13px;font-weight:500;color:' + turbColors[tp.cruise] + '">' + turbLabels[tp.cruise];
   if (tp.cruiseMinStart !== null && tp.cruise > 0) {
-    h += '<div style="font-size:10px;color:#4a5873;margin-top:2px">min ' + tp.cruiseMinStart + '-' + tp.cruiseMinEnd + '</div>';
+    if (tp.cruiseMinStart === tp.cruiseMinEnd) {
+      h += '<div style="font-size:10px;color:#4a5873;margin-top:2px">~min ' + tp.cruiseMinStart + '</div>';
+    } else {
+      h += '<div style="font-size:10px;color:#4a5873;margin-top:2px">min ' + tp.cruiseMinStart + '-' + tp.cruiseMinEnd + '</div>';
+    }
   }
   h += '</div></div>';
   h += '<div style="flex:1;background:#0a0e1a;border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:#4a5873;margin-bottom:4px">Descenso</div><div style="font-size:13px;font-weight:500;color:' + turbColors[tp.descent] + '">' + turbLabels[tp.descent] + '</div></div>';
@@ -937,13 +944,14 @@ function renderBriefing(b) {
   // Build narrative per phase
   var phases = [];
   if (tp.climb === 0) {
-    phases.push('El ascenso será imperceptible');
+    phases.push('Durante el ascenso, la turbulencia será imperceptible');
   } else {
     var climbWhy = tp.reasons.climb.length > 0 ? ' debido a ' + tp.reasons.climb.join(' y ') : '';
-    phases.push('Durante el ascenso es probable turbulencia ' + turbLabelsLC[tp.climb] + climbWhy);
+    phases.push('Durante el ascenso, es probable turbulencia ' + turbLabelsLC[tp.climb] + climbWhy);
   }
   if (tp.cruise > 0 && tp.cruiseMinStart !== null) {
-    var cruiseWhy = tp.reasons.cruise.length > 0 ? ' debido a ' + tp.reasons.cruise.join(' y ') : '';
+    var cruiseWhy = tp.reasons.cruise.filter(function(r){return r !== 'nubes';});
+    var cruiseWhyStr = cruiseWhy.length > 0 ? ' debido a ' + cruiseWhy.join(' y ') : '';
     // Check if in clouds or not at cruise
     var inCloudCruise = false;
     for (var rci = 0; rci < b.routeClouds.length; rci++) {
@@ -954,9 +962,20 @@ function renderBriefing(b) {
         }
       }
     }
-    phases.push('A partir del minuto ' + tp.cruiseMinStart + ' hasta el ' + tp.cruiseMinEnd + ', es probable turbulencia ' + turbLabelsLC[tp.cruise] + cruiseWhy + '. ' + (inCloudCruise ? 'Estarás dentro de nubes en parte de este tramo' : 'No estarás dentro de nubes'));
+    // Handle same start/end minute
+    var cruiseTimeStr;
+    if (tp.cruiseMinStart === tp.cruiseMinEnd) {
+      cruiseTimeStr = 'Sobre el minuto ' + tp.cruiseMinStart;
+    } else {
+      cruiseTimeStr = 'Entre el minuto ' + tp.cruiseMinStart + ' y el ' + tp.cruiseMinEnd;
+    }
+    phases.push(cruiseTimeStr + ', es probable turbulencia ' + turbLabelsLC[tp.cruise] + cruiseWhyStr + '. ' + (inCloudCruise ? 'Estarás dentro de nubes en parte de este tramo' : 'No estarás dentro de nubes'));
+  } else if (tp.cruise > 0) {
+    var cruiseWhy2 = tp.reasons.cruise.filter(function(r){return r !== 'nubes';});
+    var cruiseWhyStr2 = cruiseWhy2.length > 0 ? ' debido a ' + cruiseWhy2.join(' y ') : '';
+    phases.push('Durante el crucero, es probable turbulencia ' + turbLabelsLC[tp.cruise] + cruiseWhyStr2);
   } else {
-    phases.push('El crucero no presenta turbulencia prevista');
+    phases.push('Durante el crucero, no se prevé turbulencia');
   }
   if (tp.descent > 0) {
     var descWhy = tp.reasons.descent.length > 0 ? ' debido a ' + tp.reasons.descent.join(' y ') : '';
