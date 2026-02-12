@@ -630,14 +630,14 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
   // === TAKEOFF ===
   tl.push({min:0, icon:'🛫', c:'acc', type:'flight', title:'Despegue — pista ' + depR.id, desc:'Dirección ' + card(depR.h) + '. Desde que escuchas el avión acelerar hasta que despega son aproximadamente 40-50 segundos.'});
 
-  tl.push({min:0.7, icon:'⚙️', c:'ev', type:'always', title:'Retracción del tren de aterrizaje', desc:'Unos segundos después de despegar escucharás un golpe seco seguido de un zumbido debajo del avión. Son las ruedas recogiéndose. Dura pocos segundos.'});
+  tl.push({min:0.7, icon:'⚙️', c:'ev', type:'always', title:'Retracción del tren de aterrizaje', desc:'Unos segundos después de despegar escucharás un sonido mecánico seguido de un zumbido debajo del avión. Son las ruedas recogiéndose. Dura pocos segundos.'});
 
-  tl.push({min:1, icon:'🔊', c:'ev', type:'always', title:'Reducción de potencia', desc:'Entre 40 y 60 segundos después del despegue, notarás que los motores suenan menos intensos y parece que el avión deja de subir. Es completamente normal: simplemente ya no hace falta tanta potencia.'});
+  tl.push({min:1, icon:'🔊', c:'ev', type:'always', title:'Reducción de potencia', desc:'Entre 40 y 60 segundos después del despegue, notarás que los motores suenan menos intensos y parece que el avión deja de subir. Es completamente normal: simplemente ya no hace falta tanta potencia, y el avión sube a una tasa más lenta.'});
 
   // Turn — duration moved from briefing narrative to timeline only
   tl.push({min:2, icon:'✈️', c:'acc', type:'flight', title:'Viraje hacia ' + card(rHdg) + ' (' + tDir + ')', desc:'El avión gira hacia la ' + tDir + '. El viraje dura aproximadamente ' + turnSec + ' segundos.'});
 
-  tl.push({min:3.5, icon:'⚙️', c:'ev', type:'always', title:'Retracción de flaps', desc:'Las piezas del borde del ala se recogen de forma progresiva. Puedes oír un suave zumbido. Si miras la ventanilla, verás el ala "limpiarse". Ya vuelas más rápido y no son necesarios.'});
+  tl.push({min:3.5, icon:'⚙️', c:'ev', type:'always', title:'Retracción de flaps', desc:'Las piezas del borde del ala (flaps/slats) se recogen de forma progresiva. Puedes oír un suave zumbido. Si miras la ventanilla, verás el ala "limpiarse" (ya es una superficie plana, sin elementos que sobresalgan). Ya vuelas más rápido y no son necesarios.'});
 
   tl.push({min:6, icon:'🔊', c:'ev', type:'always', title:'Ascenso escalonado', desc:'Sobre todo en áreas con mucho tráfico aéreo, puedes sentir cómo el avión sube por "escalones": sube, se estabiliza, y vuelve a subir. Los motores varían su intensidad con cada cambio. Es la forma habitual de gestionar el ascenso.'});
 
@@ -653,26 +653,27 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
   }
 
   // === CRUISE ===
-  tl.push({min:climbMin, icon:'✈️', c:'ok', type:'flight', title:'Altitud de crucero', desc:'El avión se estabiliza y los motores reducen potencia.'});
+  var cruiseMinRange = climbMin > 20 ? (climbMin - 3) + '-' + climbMin : String(climbMin);
+  tl.push({min:climbMin, icon:'✈️', c:'ok', type:'flight', title:'Altitud de crucero (minuto ~' + cruiseMinRange + ')', desc:'El avión se estabiliza y los motores reducen potencia.'});
+
+  tl.push({min:10, icon:'🔔', c:'ev', type:'always', title:'Señal de cinturones', desc:'Cada aerolínea tiene diferentes estándares para desactivar la señal de cinturones. Algunas lo hacen cuando el avión sube de 10.000 pies (3.000 metros) y otras esperan al crucero. Recuerda que es importante mantenerlos abrochados en todo momento.'});
 
   tl.push({min:climbMin, icon:'📋', c:'ev', type:'always', title:'Datos de crucero', desc:'Los aviones comerciales vuelan entre FL300 y FL400 (entre 9.000 y 12.000 metros). Siempre existe una separación vertical de 1.000 pies (300 metros) y horizontal con otros aviones. La altura exacta depende de la meteorología, el tráfico y el plan de vuelo. Durante el vuelo puede variar, por eso sentirás que el avión sube y/o baja ocasionalmente.'});
-
-  tl.push({min:climbMin + 1, icon:'🔔', c:'ev', type:'always', title:'Señal de cinturones', desc:'Escucharás un tono. Dependiendo de la aerolínea, puede indicar que se apaga la señal de cinturones o ser comunicación entre pilotos y tripulación.'});
 
   // Route clouds at cruise altitude
   if (routeTurb) {
     tl.push({min:climbMin + 5, icon:'☁️', c:'cld', type:'flight', title:'Nubes a nivel de crucero', desc:'Se detectan nubes cerca de la altitud de crucero en parte de la ruta. Es posible que haya algunos momentos de turbulencia ligera.'});
     tl.push({min:climbMin + 5, icon:'🔔', c:'wrn', type:'always', title:'Sobre la turbulencia', desc:'Las turbulencias son incómodas para el pasajero pero no suponen ningún peligro para el avión. Los pilotos están tranquilos en cabina y, si pueden, adaptarán la ruta para reducir las molestias. Es importante mantener el cinturón de seguridad abrochado durante todo el vuelo, especialmente en zonas de turbulencia, según las indicaciones de la tripulación.'});
   } else {
-    tl.push({min:climbMin + 5, icon:'✈️', c:'ok', type:'flight', title:'Crucero tranquilo', desc:'Una vez alcanzada la altitud de crucero, no se prevén nubes a la altura de vuelo. Vuelo tranquilo.'});
+    tl.push({min:climbMin + 5, icon:'✈️', c:'ok', type:'flight', title:'Crucero sin turbulencias previstas', desc:'Una vez alcanzada la altitud de crucero, no se prevén nubes a la altura de vuelo.'});
   }
 
-  if (dur > 90) tl.push({min:Math.round(dur*0.35), icon:'🍽️', c:'acc', type:'always', title:'Servicio a bordo', desc:'La tripulación comienza el servicio de comidas y bebidas.'});
+  if (dur > 90) tl.push({min:Math.round(dur*0.35), icon:'🍽️', c:'acc', type:'always', title:'Servicio a bordo', desc:'En algún momento del crucero, la tripulación comenzará el servicio de comidas y bebidas. El momento exacto depende de la aerolínea y las condiciones del vuelo.'});
 
   // === DESCENT ===
-  tl.push({min:dur-22, icon:'📢', c:'acc', type:'flight', title:'Inicio del descenso', desc:'Los motores reducen su potencia al mínimo. Es la forma habitual de iniciar el descenso: el avión desciende planeando de forma controlada.'});
+  tl.push({min:dur-22, icon:'📢', c:'acc', type:'flight', title:'Inicio del descenso', desc:'Los motores reducen su potencia al mínimo y notas cómo el avión se inclina levemente hacia adelante. Es la forma habitual de iniciar el descenso y la aproximación.'});
 
-  tl.push({min:dur-15, icon:'🔊', c:'ev', type:'always', title:'Motores al mínimo', desc:'Al descender, los motores van a potencia mínima. Puede parecer que se apagan, pero siguen funcionando. Un avión puede planear decenas de kilómetros sin necesidad de empuje.'});
+  tl.push({min:dur-15, icon:'🔊', c:'ev', type:'always', title:'Motores al mínimo', desc:'Al descender, los motores van a potencia mínima y por eso los oyes menos. Sentirás que el avión desciende por escalones, y el sonido de los motores cambia de intensidad.'});
 
   // Descent cloud events
   for (var dc = 0; dc < dcEvents.length; dc++) {
@@ -765,8 +766,11 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
 // ============================================================
 // RENDER
 // ============================================================
-function renderTL(items) {
+function renderTL(items, dur) {
   var h = '';
+  // Find where descent starts (dur - 22 approx)
+  var descentStart = dur ? dur - 22 : 9999;
+
   for (var i = 0; i < items.length; i++) {
     var t = items[i];
     var last = (i === items.length - 1);
@@ -787,7 +791,14 @@ function renderTL(items) {
     var ml;
     if (t.min < 0) ml = Math.abs(t.min) + "' antes";
     else if (t.min < 1) ml = 'Despegue';
-    else ml = Math.round(t.min) + ' min';
+    else {
+      ml = Math.round(t.min) + ' min';
+      // For descent events, also show minutes to arrival
+      if (dur && t.min >= descentStart && t.min < dur) {
+        var toArr = Math.round(dur - t.min);
+        if (toArr > 0) ml += '<br><span style="color:#a78bfa;font-size:10px">-' + toArr + "' aterr.</span>";
+      }
+    }
 
     var itemClass = 'tl-item' + (isGeneric ? ' tl-item-gen' : '');
     h += '<div class="' + itemClass + '"><div class="tl-left"><span class="tl-time">' + ml + '</span><span class="tl-dot ' + dotC + '"></span>' + (!last ? '<span class="tl-line"></span>' : '') + '</div>';
@@ -873,12 +884,19 @@ function renderBriefing(b) {
   h += '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:rgba(167,139,250,.5);vertical-align:middle;margin-right:4px"></span>Nubes</span>';
   h += '<span><span style="display:inline-block;width:10px;height:2px;background:#4e9eff;vertical-align:middle;margin-right:4px"></span>Tu avión</span>';
   h += '</div>';
+  h += '<div style="margin-top:8px;display:flex;align-items:center;justify-content:center;gap:4px;font-size:10px;color:#4a5873">';
+  h += '<span>Cobertura:</span>';
+  h += '<span style="display:inline-block;width:16px;height:10px;border-radius:2px;background:rgba(167,139,250,.15)"></span><span>20%</span>';
+  h += '<span style="display:inline-block;width:16px;height:10px;border-radius:2px;background:rgba(167,139,250,.35)"></span><span>40%</span>';
+  h += '<span style="display:inline-block;width:16px;height:10px;border-radius:2px;background:rgba(167,139,250,.55)"></span><span>70%</span>';
+  h += '<span style="display:inline-block;width:16px;height:10px;border-radius:2px;background:rgba(167,139,250,.7)"></span><span>100%</span>';
+  h += '</div>';
   h += '</div>';
 
   // Unified Flight timeline
   h += '<div class="card fi"><div class="card-title">🕐 Timeline completo</div>';
   h += '<div style="margin-bottom:12px;font-size:12px;color:#7a8ba8">Los eventos <span style="color:#4e9eff">en azul</span> son específicos de tu vuelo. Los eventos <span style="color:#94a3b8">en gris</span> ocurren en todos los vuelos.</div>';
-  h += renderTL(b.tl) + '</div>';
+  h += renderTL(b.tl, b.dur) + '</div>';
 
   // Conditions
   h += '<div class="card fi"><div class="card-title">🌡️ Condiciones</div>';
@@ -928,8 +946,8 @@ function drawCloudChart(b) {
   var H = canvas.height;
   var dur = b.dur;
   var maxAlt = 13000; // meters
-  var padL = 52; // left padding for labels
-  var padR = 12;
+  var padL = 52; // left padding for km labels
+  var padR = 52; // right padding for ft labels
   var padT = 16;
   var padB = 28;
   var cW = W - padL - padR;
@@ -949,17 +967,22 @@ function drawCloudChart(b) {
   ctx.lineWidth = 1;
   ctx.fillStyle = '#4a5873';
   ctx.font = '18px SF Mono, Menlo, monospace';
-  ctx.textAlign = 'right';
 
-  var altGrids = [0, 2000, 4000, 6000, 8000, 10000, 12000];
+  var altGrids = [0, 3000, 6000, 9000, 12000];
+  var altFtLabels = ['0', '10k', '20k', '30k', '39k'];
   for (var ag = 0; ag < altGrids.length; ag++) {
     var gy = yA(altGrids[ag]);
     ctx.beginPath();
     ctx.moveTo(padL, gy);
     ctx.lineTo(W - padR, gy);
     ctx.stroke();
-    var label = altGrids[ag] === 0 ? '0' : (altGrids[ag] / 1000) + 'km';
-    ctx.fillText(label, padL - 6, gy + 5);
+    // Left: km
+    ctx.textAlign = 'right';
+    var kmLabel = altGrids[ag] === 0 ? '0' : (altGrids[ag] / 1000) + 'km';
+    ctx.fillText(kmLabel, padL - 6, gy + 5);
+    // Right: ft
+    ctx.textAlign = 'left';
+    ctx.fillText(altFtLabels[ag] + 'ft', W - padR + 6, gy + 5);
   }
 
   // Time labels at bottom
