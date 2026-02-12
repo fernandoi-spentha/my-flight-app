@@ -162,6 +162,7 @@ body{
     <div class="logo-box"><svg viewBox="0 0 24 24"><path d="M21 16v-2l-8-5V3.5A1.5 1.5 0 0 0 11.5 2 1.5 1.5 0 0 0 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg></div>
     <h1>MyFlight</h1>
     <p>Tu copiloto narrativo. Sabe lo que vas a sentir antes de despegar.</p>
+    <p style="font-size:12px;color:#4a5873;margin-top:12px;line-height:1.5;max-width:300px;margin-left:auto;margin-right:auto">Datos reales, contados desde el asiento del pasajero.</p>
   </div>
   <div>
     <div class="field-group"><label class="field-label">Número de vuelo</label><input id="inFlight" class="field" type="text" placeholder="Ej: IB3170" maxlength="10" autocapitalize="characters" autocomplete="off" spellcheck="false"></div>
@@ -236,13 +237,15 @@ var AP = {
 };
 
 var AC = {
-  A320:{n:"Airbus A320",bark:true},A321:{n:"Airbus A321",bark:true},
-  A320neo:{n:"Airbus A320neo",bark:true},A319:{n:"Airbus A319",bark:true},
-  A330:{n:"Airbus A330",bark:true},A350:{n:"Airbus A350",bark:false},
-  B738:{n:"Boeing 737-800",bark:false},B38M:{n:"Boeing 737 MAX",bark:false},
-  B787:{n:"Boeing 787 Dreamliner",bark:false},B777:{n:"Boeing 777",bark:false},
-  E190:{n:"Embraer E190",bark:false},E195:{n:"Embraer E195",bark:false},
-  ATR:{n:"ATR 72",bark:false},CRJ:{n:"CRJ",bark:false},
+  A320:{n:"Airbus A320",bark:true,quad:false},A321:{n:"Airbus A321",bark:true,quad:false},
+  A320neo:{n:"Airbus A320neo",bark:true,quad:false},A319:{n:"Airbus A319",bark:true,quad:false},
+  A330:{n:"Airbus A330",bark:true,quad:false},A350:{n:"Airbus A350",bark:false,quad:false},
+  A380:{n:"Airbus A380",bark:true,quad:true},
+  B738:{n:"Boeing 737-800",bark:false,quad:false},B38M:{n:"Boeing 737 MAX",bark:false,quad:false},
+  B787:{n:"Boeing 787 Dreamliner",bark:false,quad:false},B777:{n:"Boeing 777",bark:false,quad:false},
+  B747:{n:"Boeing 747",bark:false,quad:true},
+  E190:{n:"Embraer E190",bark:false,quad:false},E195:{n:"Embraer E195",bark:false,quad:false},
+  ATR:{n:"ATR 72",bark:false,quad:false},CRJ:{n:"CRJ",bark:false,quad:false},
 };
 
 var FLIGHTS = {
@@ -601,17 +604,28 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
   var tl = [];
 
   // === PRE-DEPARTURE ===
-  tl.push({min:-20, icon:'🚪', c:'acc', type:'flight', title:'Embarque y preparación', desc:'Acomódate en tu asiento y familiarízate con el entorno. Cinturón abrochado, móvil en modo avión.'});
-
-  tl.push({min:-10, icon:'🔧', c:'ev', type:'always', title:'Encendido de motores', desc:'Se enciende primero el motor izquierdo, después el derecho. Los escucharás acelerando, uno a uno.'});
+  tl.push({min:-25, icon:'🚪', c:'acc', type:'flight', title:'Embarque y preparación', desc:'Acomódate en tu asiento. Cinturón abrochado, móvil en modo avión. Familiarízate con las medidas de emergencia y sigue siempre las indicaciones de la tripulación.'});
 
   if (ac.bark) {
-    tl.push({min:-9, icon:'🔊', c:'ev', type:'always', title:'"Barking dog" — sonido hidráulico', desc:'Un sonido rítmico parecido a un ladrido debajo del avión. Es el sistema PTU equilibrando la presión hidráulica entre los dos motores. Solo ocurre en Airbus y desaparece cuando ambos están en marcha.'});
+    tl.push({min:-20, icon:'🔊', c:'ev', type:'always', title:'"Barking dog" — sonido hidráulico', desc:'Un sonido rítmico parecido a un ladrido debajo del avión. Es el sistema PTU equilibrando la presión hidráulica entre los dos motores. Solo ocurre en Airbus y desaparece cuando ambos motores están en marcha.'});
   }
 
-  tl.push({min:-5, icon:'🚜', c:'acc', type:'always', title:'Push back y carreteo', desc:'Un tractor empuja el avión hacia atrás para salir de la puerta de embarque. Después, el avión rueda por su propio medio hasta la pista. El tiempo de carreteo varía según el tráfico y la posición (estimado: ~' + fAP.taxi + ' minutos).'});
+  tl.push({min:-15, icon:'🔙', c:'acc', type:'always', title:'Push back', desc:'Un vehículo remolcador empuja el avión hacia atrás para separarlo de la puerta de embarque. En cuanto el avión comience a moverse, escucharás "Tripulación, armar puertas y verificar" ("Arms doors and cross-check"), a lo que la tripulación responderá a medida que lo ejecuten en cada puerta.'});
 
-  tl.push({min:-1, icon:'📢', c:'acc', type:'always', title:'"Tripulación, preparados para despegue"', desc:'El comandante avisa a la tripulación. Las azafatas toman asiento. El avión se alinea con la pista.'});
+  // Engine start — quad vs twin
+  var engDesc = ac.quad
+    ? 'Se encienden primero los motores izquierdos y después los derechos. Los escucharás acelerando uno a uno.'
+    : 'Se enciende primero el motor izquierdo y después el derecho. Los escucharás acelerando, uno a uno.';
+  tl.push({min:-12, icon:'🔧', c:'ev', type:'always', title:'Encendido de motores', desc:engDesc});
+
+  // De-icing if cold
+  if (oW.temp <= 3) {
+    tl.push({min:-10, icon:'❄️', c:'ev', type:'flight', title:'Deshielo de las alas', desc:'Como la temperatura exterior es de ' + oW.temp + '°C, es probable que el avión tenga que parar para el deshielo. Verás cómo echan un líquido (verde o naranja) sobre las alas y el fuselaje. Es un procedimiento habitual y puede añadir unos minutos al tiempo en tierra.'});
+  }
+
+  tl.push({min:-fAP.taxi, icon:'🛞', c:'acc', type:'flight', title:'Carreteo', desc:'El avión rueda hasta la pista de despegue. El tiempo varía según el tráfico y la posición (en tu caso, un estimado de ' + fAP.taxi + ' minutos).'});
+
+  tl.push({min:-1, icon:'📢', c:'acc', type:'always', title:'Entrada en pista', desc:'Varía según cada aerolínea, pero los pilotos suelen avisar a la tripulación cuando están entrando en pista. Algo como: "Tripulación, entrando en pista para despegue". La tripulación toma asiento.'});
 
   // === TAKEOFF ===
   tl.push({min:0, icon:'🛫', c:'acc', type:'flight', title:'Despegue — pista ' + depR.id, desc:'Dirección ' + card(depR.h) + '. Desde que escuchas el avión acelerar hasta que despega son aproximadamente 40-50 segundos.'});
@@ -620,7 +634,7 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
 
   tl.push({min:1, icon:'🔊', c:'ev', type:'always', title:'Reducción de potencia', desc:'Entre 40 y 60 segundos después del despegue, notarás que los motores suenan menos intensos y parece que el avión deja de subir. Es completamente normal: simplemente ya no hace falta tanta potencia.'});
 
-  // Turn
+  // Turn — duration moved from briefing narrative to timeline only
   tl.push({min:2, icon:'✈️', c:'acc', type:'flight', title:'Viraje hacia ' + card(rHdg) + ' (' + tDir + ')', desc:'El avión gira hacia la ' + tDir + '. El viraje dura aproximadamente ' + turnSec + ' segundos.'});
 
   tl.push({min:3.5, icon:'⚙️', c:'ev', type:'always', title:'Retracción de flaps', desc:'Las piezas del borde del ala se recogen de forma progresiva. Puedes oír un suave zumbido. Si miras la ventanilla, verás el ala "limpiarse". Ya vuelas más rápido y no son necesarios.'});
@@ -666,7 +680,7 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
     var minsLeft = dce.enterMin;
     var minsLeftExit = dce.exitMin;
     var dCloudNarr = 'Capa ' + (dce.thick ? 'densa' : 'parcial') + ' (' + dce.cover + '%, entre ' + altStr(dce.topM) + ' y ' + altStr(dce.baseM) + '). ' + cloudVisual(dce.thick);
-    tl.push({min:dur - minsLeft, icon:'☁️', c:'cld', type:'flight', title:'Nubes en descenso (faltan ~' + minsLeft + ' min)', desc:dCloudNarr});
+    tl.push({min:dur - minsLeft, icon:'☁️', c:'cld', type:'flight', title:'Nubes en descenso (faltan ~' + minsLeft + ' min)', desc:dCloudNarr + ' Los pilotos disponen de instrumentos de precisión para aterrizar con total seguridad incluso sin visibilidad exterior.'});
     if (dce.baseM > 200) {
       tl.push({min:dur - minsLeftExit, icon:'👁️', c:'ok', type:'flight', title:'Sales de las nubes (faltan ~' + minsLeftExit + ' min)', desc:'Desde que sales de las nubes, quedan aproximadamente ' + minsLeftExit + ' minutos para aterrizar.'});
     }
@@ -686,7 +700,7 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
 
   // ---- NARRATIVE ----
   var narr = 'Vas a despegar probablemente por la <span class="hi">pista ' + depR.id + '</span> con dirección ' + card(depR.h) + '.';
-  narr += ' A los dos minutos, el avión girará hacia la <span class="hi">' + tDir + '</span> (' + card(rHdg) + '). El viraje dura aproximadamente ' + turnSec + ' segundos.';
+  narr += ' A los dos minutos, el avión girará hacia la <span class="hi">' + tDir + '</span> (' + card(rHdg) + ').';
 
   // Climb cloud narrative
   if (originLayers.length > 0) {
@@ -719,7 +733,7 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
       narr += ' <span class="hc">capa ' + (ndlay.thick ? 'densa' : 'parcial') + ' (' + ndlay.maxCover + '%) entre ' + altStr(ndlay.topM) + ' y ' + altStr(ndlay.baseM) + '</span>';
       if (ndl < destLayers.length - 1) narr += ',';
     }
-    narr += '. Los pilotos disponen de instrumentos de precisión para aterrizar con total seguridad incluso sin visibilidad exterior.';
+    narr += '. Los pilotos aterrizan con total normalidad en estas condiciones.';
   } else {
     narr += ' <span class="hg">el cielo está despejado</span> — podrás ver la aproximación completa.';
   }
@@ -867,7 +881,7 @@ function renderBriefing(b) {
     h += '<div class="cv-row"><span class="cv-alt">0-2.000m</span><div class="cv-wrap"><div class="cv-bar ' + (b.oW.cL > 40 ? 'cv-bar-cld' : 'cv-bar-ok') + '" style="width:' + b.oW.cL + '%"></div></div><span class="cv-pct">' + b.oW.cL + '%</span></div>';
   }
   h += '</div>';
-  h += '<div style="margin-top:12px;font-size:13px;color:#7a8ba8">Tu avión cruzará entre FL300 y FL400 (~9-12km), <span class="hg">por encima de casi todas las capas</span>.</div>';
+  h += '<div style="margin-top:12px;font-size:13px;color:#7a8ba8">Tu avión volará entre FL300 y FL400 (~9-12km), <span class="hg">por encima de casi todas las capas</span>.</div>';
   h += '</div>';
 
   // Unified Flight timeline
@@ -900,6 +914,12 @@ function renderBriefing(b) {
   h += '</div></div>';
 
   h += '<div class="spacer"></div>';
+
+  // Disclaimer
+  h += '<div style="padding:16px 20px;margin-bottom:20px;border-top:1px solid rgba(78,158,255,.08)">';
+  h += '<div style="font-size:12px;color:#4a5873;line-height:1.7;text-align:center">';
+  h += 'MyFlight utiliza datos reales de vuelo y meteorología. Las explicaciones están escritas desde la experiencia de un pasajero al que le apasiona la aviación pero conoce bien el miedo a volar. Todo el contenido busca ser riguroso, pero no sustituye la información oficial de las aerolíneas ni constituye asesoramiento profesional.';
+  h += '</div></div>';
 
   document.getElementById('OUT').innerHTML = h;
   document.getElementById('btnBack').onclick = goBack;
