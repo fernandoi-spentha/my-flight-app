@@ -554,11 +554,11 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
     else if (tcl.maxCover > 40) turbClimb = Math.max(turbClimb, 1);
   }
   // Surface wind at origin (>30 km/h adds turbulence in first minutes)
-  if (oW.ws > 40) { turbClimb = Math.max(turbClimb, 2); turbReasons.climb.push('viento fuerte en superficie (' + oW.ws + ' km/h)'); }
-  else if (oW.ws > 30) { turbClimb = Math.max(turbClimb, 1); turbReasons.climb.push('viento moderado en superficie (' + oW.ws + ' km/h)'); }
+  if (oW.ws > 40) { turbClimb = Math.max(turbClimb, 2); turbReasons.climb.push('viento fuerte en superficie'); }
+  else if (oW.ws > 30) { turbClimb = Math.max(turbClimb, 1); turbReasons.climb.push('viento moderado en superficie'); }
   // CAPE at origin — convective instability during climb
-  if (oW.cape > 1500) { turbClimb = Math.max(turbClimb, 3); turbReasons.climb.push('alta inestabilidad convectiva (CAPE ' + oW.cape + ')'); }
-  else if (oW.cape > 800) { turbClimb = Math.max(turbClimb, 2); turbReasons.climb.push('inestabilidad convectiva moderada'); }
+  if (oW.cape > 1500) { turbClimb = Math.max(turbClimb, 3); turbReasons.climb.push('posibles tormentas en la zona'); }
+  else if (oW.cape > 800) { turbClimb = Math.max(turbClimb, 2); turbReasons.climb.push('actividad convectiva en la zona'); }
 
   // Cruise: check each route point for clouds, CAPE, wind shear at cruise altitude
   for (var rp = 0; rp < routeClouds.length; rp++) {
@@ -575,14 +575,14 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
         }
       }
     }
-    // CAPE along route — thunderstorms = strong turbulence
-    if (rc.w.cape > 2000) { turbCruise = Math.max(turbCruise, 3); if (turbReasons.cruise.indexOf('tormentas en ruta') === -1) turbReasons.cruise.push('tormentas en ruta (CAPE ' + rc.w.cape + ')'); if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
-    else if (rc.w.cape > 1000) { turbCruise = Math.max(turbCruise, 2); if (turbReasons.cruise.indexOf('convección moderada') === -1) turbReasons.cruise.push('convección moderada en ruta'); if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
+    // CAPE along route — thunderstorms
+    if (rc.w.cape > 2000) { turbCruise = Math.max(turbCruise, 3); if (turbReasons.cruise.indexOf('tormentas') === -1) turbReasons.cruise.push('tormentas en ruta'); if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
+    else if (rc.w.cape > 1000) { turbCruise = Math.max(turbCruise, 2); if (turbReasons.cruise.indexOf('actividad convectiva') === -1) turbReasons.cruise.push('actividad convectiva en ruta'); if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
     // Wind shear — Clear Air Turbulence (CAT) indicator
-    if (rc.w.cruiseShear > 80) { turbCruise = Math.max(turbCruise, 3); if (turbReasons.cruise.indexOf('cizalladura') === -1) turbReasons.cruise.push('cizalladura fuerte a nivel de crucero'); if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
-    else if (rc.w.cruiseShear > 50) { turbCruise = Math.max(turbCruise, 2); if (turbReasons.cruise.indexOf('cizalladura') === -1) turbReasons.cruise.push('cizalladura moderada a nivel de crucero'); if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
-    // Very strong cruise winds (jet stream edges = CAT)
-    if (rc.w.cruiseWind > 150) { turbCruise = Math.max(turbCruise, 2); if (turbReasons.cruise.indexOf('jet stream') === -1) turbReasons.cruise.push('cerca del jet stream (' + rc.w.cruiseWind + ' km/h)'); }
+    if (rc.w.cruiseShear > 80) { turbCruise = Math.max(turbCruise, 3); if (turbReasons.cruise.indexOf('vientos fuertes') === -1) turbReasons.cruise.push('vientos fuertes a nivel de crucero'); if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
+    else if (rc.w.cruiseShear > 50) { turbCruise = Math.max(turbCruise, 2); if (turbReasons.cruise.indexOf('vientos fuertes') === -1) turbReasons.cruise.push('vientos fuertes a nivel de crucero'); if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
+    // Very strong cruise winds (jet stream)
+    if (rc.w.cruiseWind > 150) { turbCruise = Math.max(turbCruise, 2); if (turbReasons.cruise.indexOf('corriente en chorro') === -1) turbReasons.cruise.push('corriente en chorro (jet stream) en la zona'); }
   }
   var routeTurb = (turbCruise > 0);
 
@@ -593,11 +593,11 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
     else if (tdl.maxCover > 40) turbDescent = Math.max(turbDescent, 1);
   }
   // Surface wind at destination
-  if (dW.ws > 40) { turbDescent = Math.max(turbDescent, 2); turbReasons.descent.push('viento fuerte en destino (' + dW.ws + ' km/h)'); }
-  else if (dW.ws > 30) { turbDescent = Math.max(turbDescent, 1); turbReasons.descent.push('viento moderado en destino (' + dW.ws + ' km/h)'); }
+  if (dW.ws > 40) { turbDescent = Math.max(turbDescent, 2); turbReasons.descent.push('viento fuerte en destino'); }
+  else if (dW.ws > 30) { turbDescent = Math.max(turbDescent, 1); turbReasons.descent.push('viento moderado en destino'); }
   // CAPE at destination
-  if (dW.cape > 1500) { turbDescent = Math.max(turbDescent, 3); turbReasons.descent.push('alta inestabilidad convectiva en destino'); }
-  else if (dW.cape > 800) { turbDescent = Math.max(turbDescent, 2); turbReasons.descent.push('convección moderada en destino'); }
+  if (dW.cape > 1500) { turbDescent = Math.max(turbDescent, 3); turbReasons.descent.push('posibles tormentas en destino'); }
+  else if (dW.cape > 800) { turbDescent = Math.max(turbDescent, 2); turbReasons.descent.push('actividad convectiva en destino'); }
 
   var turbMax = Math.max(turbClimb, turbCruise, turbDescent);
   var turbPhases = {climb: turbClimb, cruise: turbCruise, descent: turbDescent, max: turbMax, cruiseMinStart: turbCruiseMinStart, cruiseMinEnd: turbCruiseMinEnd, reasons: turbReasons};
@@ -910,11 +910,44 @@ function renderBriefing(b) {
   h += '</div></div>';
   h += '<div style="flex:1;background:#0a0e1a;border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:#4a5873;margin-bottom:4px">Descenso</div><div style="font-size:13px;font-weight:500;color:' + turbColors[tp.descent] + '">' + turbLabels[tp.descent] + '</div></div>';
   h += '</div>';
-  // Show turbulence reasons if any
-  var allReasons = [].concat(tp.reasons.climb, tp.reasons.cruise, tp.reasons.descent);
-  if (allReasons.length > 0) {
-    h += '<div style="margin-top:8px;font-size:11px;color:#7a8ba8;line-height:1.6">Factores: ' + allReasons.join(', ') + '.</div>';
+  // Human-readable turbulence narrative
+  var turbNarr = '';
+  var turbLabelsLC = ['imperceptible', 'baja', 'baja/media', 'media/fuerte', 'fuerte'];
+  // Build narrative per phase
+  var phases = [];
+  if (tp.climb === 0) {
+    phases.push('El ascenso será imperceptible');
+  } else {
+    var climbWhy = tp.reasons.climb.length > 0 ? ' debido a ' + tp.reasons.climb.join(' y ') : '';
+    phases.push('Durante el ascenso es probable turbulencia ' + turbLabelsLC[tp.climb] + climbWhy);
   }
+  if (tp.cruise > 0 && tp.cruiseMinStart !== null) {
+    var cruiseWhy = tp.reasons.cruise.length > 0 ? ' debido a ' + tp.reasons.cruise.join(' y ') : '';
+    // Check if in clouds or not at cruise
+    var inCloudCruise = false;
+    for (var rci = 0; rci < b.routeClouds.length; rci++) {
+      var rcw = b.routeClouds[rci];
+      if (rcw.w.profile) {
+        for (var pli = 0; pli < rcw.w.profile.length; pli++) {
+          if (rcw.w.profile[pli].altM >= b.crM - 1500 && rcw.w.profile[pli].altM <= b.crM + 1500 && rcw.w.profile[pli].cover > 30) inCloudCruise = true;
+        }
+      }
+    }
+    phases.push('A partir del minuto ' + tp.cruiseMinStart + ' hasta el ' + tp.cruiseMinEnd + ', es probable turbulencia ' + turbLabelsLC[tp.cruise] + cruiseWhy + '. ' + (inCloudCruise ? 'Estarás dentro de nubes en parte de este tramo' : 'No estarás dentro de nubes'));
+  } else {
+    phases.push('El crucero no presenta turbulencia prevista');
+  }
+  if (tp.descent > 0) {
+    var descWhy = tp.reasons.descent.length > 0 ? ' debido a ' + tp.reasons.descent.join(' y ') : '';
+    phases.push('En el descenso es probable turbulencia ' + turbLabelsLC[tp.descent] + descWhy);
+  } else {
+    phases.push('El descenso será tranquilo');
+  }
+  turbNarr = phases.join('. ') + '.';
+  if (tp.max > 0) {
+    turbNarr += ' Recuerda que las turbulencias son incómodas pero no afectan en absoluto a la seguridad del vuelo.';
+  }
+  h += '<div style="margin-top:10px;font-size:12px;color:#94a3b8;line-height:1.7">' + turbNarr + '</div>';
   h += '</div>';
 
   // Safety banner
