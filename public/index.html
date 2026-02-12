@@ -759,7 +759,7 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
     arrTimeStr = ('0'+at.getUTCHours()).slice(-2) + ':' + ('0'+at.getUTCMinutes()).slice(-2);
   }
 
-  return {tl:tl, narr:narr, sN:sN, ac:ac, oW:oW, dW:dW, depR:depR, arrR:arrR, dur:dur, fAP:fAP, tAP:tAP, fl:fl, isRealWeather:isRealWeather, depTimeStr:depTimeStr, arrTimeStr:arrTimeStr, routeTurb:routeTurb, turbPhases:turbPhases};
+  return {tl:tl, narr:narr, sN:sN, ac:ac, oW:oW, dW:dW, depR:depR, arrR:arrR, dur:dur, fAP:fAP, tAP:tAP, fl:fl, isRealWeather:isRealWeather, depTimeStr:depTimeStr, arrTimeStr:arrTimeStr, routeTurb:routeTurb, turbPhases:turbPhases, routeClouds:routeClouds, crM:crM, climbMin:climbMin, altAtMin:altAtMin};
 }
 
 // ============================================================
@@ -864,24 +864,15 @@ function renderBriefing(b) {
   // Narrative
   h += '<div class="card fi"><div class="card-title">✅ Tu briefing</div><div class="narr">' + b.narr + '</div></div>';
 
-  // Cloud visual — vertical profile
-  h += '<div class="card fi"><div class="card-title">☁️ Perfil de nubes — ' + b.fAP.city + '</div>';
-  h += '<div style="background:#0d1220;border-radius:10px;padding:16px">';
-  if (b.oW.profile) {
-    var profLabels = ['100m','750m','1.500m','3.000m','4.200m','5.500m','7.200m','9.200m','10.400m','11.800m'];
-    for (var pi = b.oW.profile.length - 1; pi >= 0; pi--) {
-      var pp = b.oW.profile[pi];
-      var barCol = pp.cover > 30 ? 'cv-bar-cld' : 'cv-bar-ok';
-      var opacity = pp.cover > 60 ? '' : (pp.cover > 30 ? 'opacity:.6' : '');
-      h += '<div class="cv-row"><span class="cv-alt">' + profLabels[pi] + '</span><div class="cv-wrap"><div class="cv-bar ' + barCol + '" style="width:' + pp.cover + '%;' + opacity + '"></div></div><span class="cv-pct">' + pp.cover + '%</span></div>';
-    }
-  } else {
-    h += '<div class="cv-row"><span class="cv-alt">+6.000m</span><div class="cv-wrap"><div class="cv-bar ' + (b.oW.cH > 40 ? 'cv-bar-cld' : 'cv-bar-ok') + '" style="width:' + b.oW.cH + '%"></div></div><span class="cv-pct">' + b.oW.cH + '%</span></div>';
-    h += '<div class="cv-row"><span class="cv-alt">2-6.000m</span><div class="cv-wrap"><div class="cv-bar ' + (b.oW.cM > 40 ? 'cv-bar-cld' : 'cv-bar-ok') + '" style="width:' + b.oW.cM + '%"></div></div><span class="cv-pct">' + b.oW.cM + '%</span></div>';
-    h += '<div class="cv-row"><span class="cv-alt">0-2.000m</span><div class="cv-wrap"><div class="cv-bar ' + (b.oW.cL > 40 ? 'cv-bar-cld' : 'cv-bar-ok') + '" style="width:' + b.oW.cL + '%"></div></div><span class="cv-pct">' + b.oW.cL + '%</span></div>';
-  }
+  // Cloud cross-section chart — canvas
+  h += '<div class="card fi"><div class="card-title">☁️ Perfil de vuelo y nubes</div>';
+  h += '<div style="position:relative;background:#0d1220;border-radius:10px;padding:12px;overflow:hidden">';
+  h += '<canvas id="cloudChart" width="760" height="340" style="width:100%;height:170px;display:block"></canvas>';
   h += '</div>';
-  h += '<div style="margin-top:12px;font-size:13px;color:#7a8ba8">Tu avión volará entre FL300 y FL400 (~9-12km), <span class="hg">por encima de casi todas las capas</span>.</div>';
+  h += '<div style="margin-top:10px;display:flex;gap:16px;justify-content:center;font-size:11px;color:#7a8ba8">';
+  h += '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:rgba(167,139,250,.5);vertical-align:middle;margin-right:4px"></span>Nubes</span>';
+  h += '<span><span style="display:inline-block;width:10px;height:2px;background:#4e9eff;vertical-align:middle;margin-right:4px"></span>Tu avión</span>';
+  h += '</div>';
   h += '</div>';
 
   // Unified Flight timeline
@@ -922,7 +913,143 @@ function renderBriefing(b) {
   h += '</div></div>';
 
   document.getElementById('OUT').innerHTML = h;
+
+  // Draw cloud cross-section chart
+  drawCloudChart(b);
+
   document.getElementById('btnBack').onclick = goBack;
+}
+
+function drawCloudChart(b) {
+  var canvas = document.getElementById('cloudChart');
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+  var W = canvas.width;
+  var H = canvas.height;
+  var dur = b.dur;
+  var maxAlt = 13000; // meters
+  var padL = 52; // left padding for labels
+  var padR = 12;
+  var padT = 16;
+  var padB = 28;
+  var cW = W - padL - padR;
+  var cH = H - padT - padB;
+
+  // Clear
+  ctx.fillStyle = '#0d1220';
+  ctx.fillRect(0, 0, W, H);
+
+  // Helper: x from minute
+  function xM(min) { return padL + (min / dur) * cW; }
+  // Helper: y from altitude
+  function yA(alt) { return padT + cH - (alt / maxAlt) * cH; }
+
+  // Grid lines and labels
+  ctx.strokeStyle = 'rgba(78,158,255,.08)';
+  ctx.lineWidth = 1;
+  ctx.fillStyle = '#4a5873';
+  ctx.font = '18px SF Mono, Menlo, monospace';
+  ctx.textAlign = 'right';
+
+  var altGrids = [0, 2000, 4000, 6000, 8000, 10000, 12000];
+  for (var ag = 0; ag < altGrids.length; ag++) {
+    var gy = yA(altGrids[ag]);
+    ctx.beginPath();
+    ctx.moveTo(padL, gy);
+    ctx.lineTo(W - padR, gy);
+    ctx.stroke();
+    var label = altGrids[ag] === 0 ? '0' : (altGrids[ag] / 1000) + 'km';
+    ctx.fillText(label, padL - 6, gy + 5);
+  }
+
+  // Time labels at bottom
+  ctx.textAlign = 'center';
+  ctx.font = '18px SF Mono, Menlo, monospace';
+  var timeStep = dur <= 90 ? 10 : (dur <= 180 ? 20 : 30);
+  for (var tm = 0; tm <= dur; tm += timeStep) {
+    var tx = xM(tm);
+    ctx.fillText(tm + "'", tx, H - 4);
+  }
+
+  // Airport labels
+  ctx.fillStyle = '#7a8ba8';
+  ctx.font = 'bold 20px -apple-system, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(b.fl.from, padL + 4, H - 4);
+  ctx.textAlign = 'right';
+  ctx.fillText(b.fl.to, W - padR - 4, H - 4);
+
+  // Draw cloud coverage as colored columns for each route point
+  // Each route point covers a time span and has a vertical profile
+  var rc = b.routeClouds;
+  if (rc && rc.length > 0) {
+    for (var ri = 0; ri < rc.length; ri++) {
+      var rp = rc[ri];
+      if (!rp.w.profile) continue;
+
+      // Time span for this point
+      var fracStart = (ri === 0) ? 0 : (rc[ri-1].frac + rp.frac) / 2;
+      var fracEnd = (ri === rc.length - 1) ? 1 : (rp.frac + rc[ri+1].frac) / 2;
+      var x1 = xM(fracStart * dur);
+      var x2 = xM(fracEnd * dur);
+      var colW = x2 - x1;
+
+      // Draw each pressure level as a band
+      var prof = rp.w.profile;
+      for (var pi = 0; pi < prof.length; pi++) {
+        if (prof[pi].cover < 10) continue;
+
+        var altBot = prof[pi].altM;
+        // Top of this band = bottom of next, or +1500m for top level
+        var altTop = (pi < prof.length - 1) ? prof[pi + 1].altM : prof[pi].altM + 1500;
+        // Smooth band boundaries
+        var bandBot = (pi > 0) ? (prof[pi - 1].altM + altBot) / 2 : altBot;
+        var bandTop = (pi < prof.length - 1) ? (altBot + altTop) / 2 : altTop;
+
+        var alpha = Math.min(0.7, prof[pi].cover / 100 * 0.8);
+        ctx.fillStyle = 'rgba(167,139,250,' + alpha.toFixed(2) + ')';
+        ctx.fillRect(x1, yA(bandTop), colW, yA(bandBot) - yA(bandTop));
+      }
+    }
+  }
+
+  // Draw aircraft trajectory line
+  ctx.strokeStyle = '#4e9eff';
+  ctx.lineWidth = 3;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  var steps = 100;
+  for (var si = 0; si <= steps; si++) {
+    var min = (si / steps) * dur;
+    var alt = b.altAtMin(min);
+    var px = xM(min);
+    var py = yA(alt);
+    if (si === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+
+  // Glow effect on aircraft line
+  ctx.strokeStyle = 'rgba(78,158,255,.25)';
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  for (var si2 = 0; si2 <= steps; si2++) {
+    var min2 = (si2 / steps) * dur;
+    var alt2 = b.altAtMin(min2);
+    var px2 = xM(min2);
+    var py2 = yA(alt2);
+    if (si2 === 0) ctx.moveTo(px2, py2);
+    else ctx.lineTo(px2, py2);
+  }
+  ctx.stroke();
+
+  // Small plane icon at cruise midpoint
+  ctx.fillStyle = '#4e9eff';
+  ctx.font = '24px sans-serif';
+  ctx.textAlign = 'center';
+  var midMin = dur / 2;
+  ctx.fillText('✈', xM(midMin), yA(b.altAtMin(midMin)) - 10);
 }
 
 // ============================================================
