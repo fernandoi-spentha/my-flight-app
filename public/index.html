@@ -554,7 +554,6 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
   }
 
   var turbMax = Math.max(turbClimb, turbCruise, turbDescent);
-  var turbLabels = ['Imperceptible', 'Baja', 'Baja / Media', 'Media / Fuerte'];
   var turbPhases = {climb: turbClimb, cruise: turbCruise, descent: turbDescent, max: turbMax, cruiseMinStart: turbCruiseMinStart, cruiseMinEnd: turbCruiseMinEnd};
 
   // Destination cloud layers for descent
@@ -823,14 +822,14 @@ function renderBriefing(b) {
 
   // Turbulence estimate with per-phase breakdown
   var tp = b.turbPhases;
-  var turbLabels = ['Imperceptible', 'Baja', 'Baja / Media', 'Media / Fuerte'];
-  var turbColors = ['#4e9eff', '#7a8ba8', '#94a3b8', '#64748b'];
-  var turbWidths = ['10%', '30%', '55%', '80%'];
+  var turbLabels = ['Imperceptible', 'Baja', 'Baja / Media', 'Media / Fuerte', 'Fuerte'];
+  var turbColors = ['#4e9eff', '#7a8ba8', '#94a3b8', '#64748b', '#475569'];
+  var turbWidths = ['8%', '25%', '45%', '65%', '85%'];
 
   h += '<div class="card fi">';
   h += '<div class="card-title">✈️ Turbulencia estimada</div>';
   h += '<div class="turb-bar"><div class="turb-fill" style="width:' + turbWidths[tp.max] + ';background:' + turbColors[tp.max] + '"></div></div>';
-  h += '<div style="display:flex;justify-content:space-between;font-size:11px;color:#4a5873;margin-top:4px"><span>Imperceptible</span><span>Baja</span><span>Baja/Media</span><span>Media/Fuerte</span></div>';
+  h += '<div style="display:flex;justify-content:space-between;font-size:10px;color:#4a5873;margin-top:4px"><span>Imperceptible</span><span>Baja</span><span>Baja/Media</span><span>Media/Fuerte</span><span>Fuerte</span></div>';
   h += '<div style="text-align:center;margin-top:10px;font-size:15px;font-weight:600;color:' + turbColors[tp.max] + '">' + turbLabels[tp.max] + '</div>';
 
   // Phase breakdown
