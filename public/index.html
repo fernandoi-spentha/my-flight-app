@@ -273,35 +273,48 @@ function simWeather(lat) {
   return {temp:temp, ws:ws, wd:wd, cL:cL, cM:cM, cH:cH, real:false};
 }
 
-async function fetchWeather(lat, lon) {
+async function fetchWeather(lat, lon, targetDate) {
+  // targetDate: Date object for when the plane will be at this point
+  // If not provided, uses current time
   try {
-    // Get current hour for indexing hourly data
-    var now = new Date();
-    var hour = now.getUTCHours();
+    var target = targetDate || new Date();
+    var targetHour = target.getUTCHours();
 
+    // Need forecast_days=2 in case flight crosses midnight
     var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon
       + '&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover'
       + '&hourly=cloud_cover_1000hPa,cloud_cover_925hPa,cloud_cover_850hPa,cloud_cover_700hPa,cloud_cover_600hPa,cloud_cover_500hPa,cloud_cover_400hPa,cloud_cover_300hPa,cloud_cover_250hPa,cloud_cover_200hPa'
-      + '&forecast_days=1&timezone=UTC';
+      + '&forecast_days=2&timezone=UTC';
     var r = await fetch(url);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     var d = await r.json();
     var c = d.current;
     var h = d.hourly;
 
-    // Build vertical cloud profile from pressure levels
-    // Each level: {hPa, altM (approx meters), altFt (approx feet), cover %}
+    // Find the hourly index that best matches the target time
+    // hourly.time[] is array of ISO strings like "2026-02-12T00:00"
+    var bestIdx = 0;
+    if (h.time && h.time.length > 0) {
+      var targetMs = target.getTime();
+      var minDiff = Infinity;
+      for (var ti = 0; ti < h.time.length; ti++) {
+        var diff = Math.abs(new Date(h.time[ti] + 'Z').getTime() - targetMs);
+        if (diff < minDiff) { minDiff = diff; bestIdx = ti; }
+      }
+    }
+
+    // Build vertical cloud profile from pressure levels at the target hour
     var profile = [
-      {hPa:1000, altM:100,   altFt:300,    cover: h.cloud_cover_1000hPa[hour]},
-      {hPa:925,  altM:750,   altFt:2500,   cover: h.cloud_cover_925hPa[hour]},
-      {hPa:850,  altM:1500,  altFt:5000,   cover: h.cloud_cover_850hPa[hour]},
-      {hPa:700,  altM:3000,  altFt:10000,  cover: h.cloud_cover_700hPa[hour]},
-      {hPa:600,  altM:4200,  altFt:14000,  cover: h.cloud_cover_600hPa[hour]},
-      {hPa:500,  altM:5500,  altFt:18000,  cover: h.cloud_cover_500hPa[hour]},
-      {hPa:400,  altM:7200,  altFt:24000,  cover: h.cloud_cover_400hPa[hour]},
-      {hPa:300,  altM:9200,  altFt:30000,  cover: h.cloud_cover_300hPa[hour]},
-      {hPa:250,  altM:10400, altFt:34000,  cover: h.cloud_cover_250hPa[hour]},
-      {hPa:200,  altM:11800, altFt:39000,  cover: h.cloud_cover_200hPa[hour]}
+      {hPa:1000, altM:100,   altFt:300,    cover: h.cloud_cover_1000hPa[bestIdx]},
+      {hPa:925,  altM:750,   altFt:2500,   cover: h.cloud_cover_925hPa[bestIdx]},
+      {hPa:850,  altM:1500,  altFt:5000,   cover: h.cloud_cover_850hPa[bestIdx]},
+      {hPa:700,  altM:3000,  altFt:10000,  cover: h.cloud_cover_700hPa[bestIdx]},
+      {hPa:600,  altM:4200,  altFt:14000,  cover: h.cloud_cover_600hPa[bestIdx]},
+      {hPa:500,  altM:5500,  altFt:18000,  cover: h.cloud_cover_500hPa[bestIdx]},
+      {hPa:400,  altM:7200,  altFt:24000,  cover: h.cloud_cover_400hPa[bestIdx]},
+      {hPa:300,  altM:9200,  altFt:30000,  cover: h.cloud_cover_300hPa[bestIdx]},
+      {hPa:250,  altM:10400, altFt:34000,  cover: h.cloud_cover_250hPa[bestIdx]},
+      {hPa:200,  altM:11800, altFt:39000,  cover: h.cloud_cover_200hPa[bestIdx]}
     ];
 
     // Derive low/mid/high for legacy compatibility
@@ -317,7 +330,8 @@ async function fetchWeather(lat, lon) {
       cM: Math.round(cM),
       cH: Math.round(cH),
       profile: profile,
-      real: true
+      real: true,
+      forecastHour: h.time[bestIdx]
     };
   } catch(e) {
     console.log('Weather API error for', lat, lon, e);
@@ -325,17 +339,30 @@ async function fetchWeather(lat, lon) {
   }
 }
 
-async function fetchRouteWeather(fAP, tAP) {
-  // Fetch weather for 8 points along the route: origin, 6 intermediate, destination
+async function fetchRouteWeather(fAP, tAP, depTimeStr, durationMin) {
+  // Calculate when the plane passes each point
+  // Use departure time if available, otherwise assume departing now
+  var depUTC = new Date(); // default: departing now
+  if (depTimeStr) {
+    // depTimeStr is local time like "2026-02-12T16:05:00" — treat as approximate UTC
+    // For forecast hour matching, being off by 1h is fine since weather changes slowly
+    var parsed = new Date(depTimeStr);
+    if (!isNaN(parsed.getTime())) depUTC = parsed;
+  }
+  var durMs = (durationMin || 150) * 60000;
+
+  // 8 points along the route: origin, 6 intermediate, destination
   var points = [];
   for (var i = 0; i <= 7; i++) {
     var frac = i / 7;
     var lat = fAP.lat + (tAP.lat - fAP.lat) * frac;
     var lon = fAP.lon + (tAP.lon - fAP.lon) * frac;
-    points.push({frac: frac, lat: lat, lon: lon});
+    var passTime = new Date(depUTC.getTime() + frac * durMs);
+    points.push({frac: frac, lat: lat, lon: lon, passTime: passTime});
   }
-  // Fetch all in parallel
-  var promises = points.map(function(p) { return fetchWeather(p.lat, p.lon); });
+
+  // Fetch all in parallel, each with its own target time
+  var promises = points.map(function(p) { return fetchWeather(p.lat, p.lon, p.passTime); });
   var results = await Promise.all(promises);
   var routeW = [];
   for (var j = 0; j < points.length; j++) {
@@ -962,7 +989,7 @@ async function analyze() {
   document.getElementById(steps[1]).className = 'step on';
   var weatherData = null;
   try {
-    weatherData = await fetchRouteWeather(fAP, tAP);
+    weatherData = await fetchRouteWeather(fAP, tAP, fl.depTime, fl.dur);
   } catch(e) { console.log('Weather fetch failed, using simulated', e); }
   document.getElementById(steps[1]).className = 'step ok';
 
