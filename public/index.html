@@ -366,20 +366,19 @@ async function fetchWeather(lat, lon, targetDate) {
 
 async function fetchRouteWeather(fAP, tAP, depTimeStr, durationMin) {
   // Calculate when the plane passes each point
-  // Use departure time if available, otherwise assume departing now
-  var depUTC = new Date(); // default: departing now
+  var depUTC = new Date();
   if (depTimeStr) {
-    // depTimeStr is local time like "2026-02-12T16:05:00" — treat as approximate UTC
-    // For forecast hour matching, being off by 1h is fine since weather changes slowly
     var parsed = new Date(depTimeStr);
     if (!isNaN(parsed.getTime())) depUTC = parsed;
   }
-  var durMs = (durationMin || 150) * 60000;
+  var dur = durationMin || 150;
+  var durMs = dur * 60000;
 
-  // 8 points along the route: origin, 6 intermediate, destination
+  // Dynamic sampling: one point every ~15 min, minimum 4, max 20
+  var numPoints = Math.max(4, Math.min(20, Math.round(dur / 15)));
   var points = [];
-  for (var i = 0; i <= 7; i++) {
-    var frac = i / 7;
+  for (var i = 0; i <= numPoints; i++) {
+    var frac = i / numPoints;
     var lat = fAP.lat + (tAP.lat - fAP.lat) * frac;
     var lon = fAP.lon + (tAP.lon - fAP.lon) * frac;
     var passTime = new Date(depUTC.getTime() + frac * durMs);
@@ -560,19 +559,22 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
   if (oW.cape > 1500) { turbClimb = Math.max(turbClimb, 3); turbReasons.climb.push('posibles tormentas en la zona'); }
   else if (oW.cape > 800) { turbClimb = Math.max(turbClimb, 2); turbReasons.climb.push('actividad convectiva en la zona'); }
 
-  // Cruise: check each route point for clouds, CAPE, wind shear at cruise altitude
-  // Only consider points that are in cruise phase (after climbMin, before descent)
+  // Cruise: check each route point — analyze clouds/CAPE/shear at the altitude the plane is at
+  // This covers climb-through, cruise, and descent-through turbulence
   var cruiseReasonSet = {};
   for (var rp = 0; rp < routeClouds.length; rp++) {
     var rc = routeClouds[rp];
     var rpMin = Math.round(rc.frac * dur);
-    // Skip points that are in climb or descent phase
-    if (rpMin < climbMin || rpMin > dur - 22) continue;
+    // Skip very early (pre-takeoff) and very late (post-landing)
+    if (rpMin < 2 || rpMin > dur - 2) continue;
+    // What altitude is the plane at this minute?
+    var planeAlt = altAtMin(rpMin);
 
     if (rc.w.profile) {
       for (var pl = 0; pl < rc.w.profile.length; pl++) {
         var pLevel = rc.w.profile[pl];
-        if (pLevel.altM >= crM - 1500 && pLevel.altM <= crM + 1500 && pLevel.cover > 30) {
+        // Check if this cloud level is within ±1500m of where the plane is
+        if (Math.abs(pLevel.altM - planeAlt) < 1500 && pLevel.cover > 30) {
           if (pLevel.cover > 60) turbCruise = Math.max(turbCruise, 2);
           else turbCruise = Math.max(turbCruise, 1);
           if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin;
@@ -581,14 +583,16 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
         }
       }
     }
-    // CAPE along route — thunderstorms
+    // CAPE along route — thunderstorms (relevant at any altitude)
     if (rc.w.cape > 2000) { turbCruise = Math.max(turbCruise, 3); cruiseReasonSet['tormentas en ruta'] = true; if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
     else if (rc.w.cape > 1000) { turbCruise = Math.max(turbCruise, 2); cruiseReasonSet['actividad convectiva'] = true; if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
-    // Wind shear — CAT indicator
-    if (rc.w.cruiseShear > 80) { turbCruise = Math.max(turbCruise, 3); cruiseReasonSet['vientos fuertes a nivel de crucero'] = true; if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
-    else if (rc.w.cruiseShear > 50) { turbCruise = Math.max(turbCruise, 2); cruiseReasonSet['vientos fuertes a nivel de crucero'] = true; if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
-    // Very strong cruise winds (jet stream)
-    if (rc.w.cruiseWind > 150) { turbCruise = Math.max(turbCruise, 2); cruiseReasonSet['corriente en chorro (jet stream)'] = true; }
+    // Wind shear — only relevant above FL200 (~6000m)
+    if (planeAlt > 6000) {
+      if (rc.w.cruiseShear > 80) { turbCruise = Math.max(turbCruise, 3); cruiseReasonSet['vientos fuertes a nivel de crucero'] = true; if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
+      else if (rc.w.cruiseShear > 50) { turbCruise = Math.max(turbCruise, 2); cruiseReasonSet['vientos fuertes a nivel de crucero'] = true; if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
+      // Jet stream
+      if (rc.w.cruiseWind > 150) { turbCruise = Math.max(turbCruise, 2); cruiseReasonSet['corriente en chorro (jet stream)'] = true; }
+    }
   }
   turbReasons.cruise = Object.keys(cruiseReasonSet);
   var routeTurb = (turbCruise > 0);
@@ -684,8 +688,7 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
 
   tl.push({min:1, icon:'🔊', c:'ev', type:'always', title:'Reducción de potencia', desc:'Entre 40 y 60 segundos después del despegue, notarás que los motores suenan menos intensos y parece que el avión deja de subir. Es completamente normal: simplemente ya no hace falta tanta potencia, y el avión sube a una tasa más lenta.'});
 
-  // Turn — duration moved from briefing narrative to timeline only
-  tl.push({min:2, icon:'✈️', c:'acc', type:'flight', title:'Viraje hacia rumbo ' + card(rHdg), desc:'El avión girará para tomar rumbo hacia ' + tAP.city + '. Notarás una ligera inclinación durante unos ' + turnSec + ' segundos.'});
+  tl.push({min:2, icon:'✈️', c:'acc', type:'always', title:'El avión toma rumbo', desc:'El avión girará para tomar rumbo hacia ' + tAP.city + '. Notarás una ligera inclinación durante unos segundos.'});
 
   tl.push({min:3.5, icon:'⚙️', c:'ev', type:'always', title:'Retracción de flaps', desc:'Las piezas del borde del ala (flaps/slats) se recogen de forma progresiva. Puedes oír un suave zumbido. Si miras la ventanilla, verás el ala "limpiarse" (ya es una superficie plana, sin elementos que sobresalgan). Ya vuelas más rápido y no son necesarios.'});
 
@@ -768,7 +771,7 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
 
   // ---- NARRATIVE ----
   var narr = 'Vas a despegar probablemente por la <span class="hi">pista ' + depR.id + '</span> con dirección ' + card(depR.h) + '.';
-  narr += ' A los dos minutos, el avión girará para tomar rumbo hacia <span class="hi">' + tAP.city + '</span> (' + card(rHdg) + ').';
+  narr += ' A los pocos minutos, el avión girará para tomar rumbo hacia <span class="hi">' + tAP.city + '</span>.';
 
   // Climb cloud narrative
   if (originLayers.length > 0) {
