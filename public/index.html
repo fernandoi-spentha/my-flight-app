@@ -561,9 +561,14 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
   else if (oW.cape > 800) { turbClimb = Math.max(turbClimb, 2); turbReasons.climb.push('actividad convectiva en la zona'); }
 
   // Cruise: check each route point for clouds, CAPE, wind shear at cruise altitude
+  // Only consider points that are in cruise phase (after climbMin, before descent)
+  var cruiseReasonSet = {};
   for (var rp = 0; rp < routeClouds.length; rp++) {
     var rc = routeClouds[rp];
     var rpMin = Math.round(rc.frac * dur);
+    // Skip points that are in climb or descent phase
+    if (rpMin < climbMin || rpMin > dur - 22) continue;
+
     if (rc.w.profile) {
       for (var pl = 0; pl < rc.w.profile.length; pl++) {
         var pLevel = rc.w.profile[pl];
@@ -572,18 +577,20 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
           else turbCruise = Math.max(turbCruise, 1);
           if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin;
           turbCruiseMinEnd = rpMin;
+          cruiseReasonSet['nubes'] = true;
         }
       }
     }
     // CAPE along route — thunderstorms
-    if (rc.w.cape > 2000) { turbCruise = Math.max(turbCruise, 3); if (turbReasons.cruise.indexOf('tormentas') === -1) turbReasons.cruise.push('tormentas en ruta'); if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
-    else if (rc.w.cape > 1000) { turbCruise = Math.max(turbCruise, 2); if (turbReasons.cruise.indexOf('actividad convectiva') === -1) turbReasons.cruise.push('actividad convectiva en ruta'); if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
-    // Wind shear — Clear Air Turbulence (CAT) indicator
-    if (rc.w.cruiseShear > 80) { turbCruise = Math.max(turbCruise, 3); if (turbReasons.cruise.indexOf('vientos fuertes') === -1) turbReasons.cruise.push('vientos fuertes a nivel de crucero'); if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
-    else if (rc.w.cruiseShear > 50) { turbCruise = Math.max(turbCruise, 2); if (turbReasons.cruise.indexOf('vientos fuertes') === -1) turbReasons.cruise.push('vientos fuertes a nivel de crucero'); if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
+    if (rc.w.cape > 2000) { turbCruise = Math.max(turbCruise, 3); cruiseReasonSet['tormentas en ruta'] = true; if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
+    else if (rc.w.cape > 1000) { turbCruise = Math.max(turbCruise, 2); cruiseReasonSet['actividad convectiva'] = true; if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
+    // Wind shear — CAT indicator
+    if (rc.w.cruiseShear > 80) { turbCruise = Math.max(turbCruise, 3); cruiseReasonSet['vientos fuertes a nivel de crucero'] = true; if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
+    else if (rc.w.cruiseShear > 50) { turbCruise = Math.max(turbCruise, 2); cruiseReasonSet['vientos fuertes a nivel de crucero'] = true; if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
     // Very strong cruise winds (jet stream)
-    if (rc.w.cruiseWind > 150) { turbCruise = Math.max(turbCruise, 2); if (turbReasons.cruise.indexOf('corriente en chorro') === -1) turbReasons.cruise.push('corriente en chorro (jet stream) en la zona'); }
+    if (rc.w.cruiseWind > 150) { turbCruise = Math.max(turbCruise, 2); cruiseReasonSet['corriente en chorro (jet stream)'] = true; }
   }
+  turbReasons.cruise = Object.keys(cruiseReasonSet);
   var routeTurb = (turbCruise > 0);
 
   // Descent: check destination layers thickness + surface wind + CAPE
@@ -703,12 +710,26 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
 
   tl.push({min:climbMin, icon:'📋', c:'ev', type:'always', title:'Datos de crucero', desc:'Los aviones comerciales vuelan entre FL300 y FL400 (entre 9.000 y 12.000 metros). Siempre existe una separación vertical de 1.000 pies (300 metros) y horizontal con otros aviones. La altura exacta depende de la meteorología, el tráfico y el plan de vuelo. Durante el vuelo puede variar, por eso sentirás que el avión sube y/o baja ocasionalmente.'});
 
-  // Route clouds at cruise altitude
-  if (routeTurb) {
-    tl.push({min:climbMin + 5, icon:'☁️', c:'cld', type:'flight', title:'Nubes a nivel de crucero', desc:'Se detectan nubes cerca de la altitud de crucero en parte de la ruta. Es posible que haya algunos momentos de turbulencia ligera.'});
-    tl.push({min:climbMin + 5, icon:'🔔', c:'wrn', type:'always', title:'Sobre la turbulencia', desc:'Las turbulencias son incómodas para el pasajero pero no suponen ningún peligro para el avión. Los pilotos están tranquilos en cabina y, si pueden, adaptarán la ruta para reducir las molestias. Es importante mantener el cinturón de seguridad abrochado durante todo el vuelo, especialmente en zonas de turbulencia, según las indicaciones de la tripulación.'});
+  // Route clouds at cruise altitude — use turbulence data for consistent messaging
+  var turbLabelsLC2 = ['imperceptible', 'baja', 'baja/media', 'media/fuerte', 'fuerte'];
+  if (routeTurb || turbCruise > 0) {
+    var cruiseReasons = turbReasons.cruise;
+    var hasCloudsCruise = cruiseReasons.indexOf('nubes') >= 0;
+    var nonCloudReasons = cruiseReasons.filter(function(r) { return r !== 'nubes'; });
+    var cruiseTlDesc = '';
+    if (nonCloudReasons.length > 0) {
+      cruiseTlDesc = 'Se prevé turbulencia ' + turbLabelsLC2[turbCruise] + ' debido a ' + nonCloudReasons.join(' y ') + '.';
+    } else if (hasCloudsCruise) {
+      cruiseTlDesc = 'Se detectan nubes cerca de la altitud de crucero. Es posible que notes turbulencia ' + turbLabelsLC2[turbCruise] + '.';
+    } else {
+      cruiseTlDesc = 'Se prevé turbulencia ' + turbLabelsLC2[turbCruise] + ' en esta fase del vuelo.';
+    }
+    var cruiseTlTitle = 'Turbulencia prevista en crucero';
+    if (turbCruiseMinStart !== null) cruiseTlTitle += ' (min ' + turbCruiseMinStart + '-' + turbCruiseMinEnd + ')';
+    tl.push({min: turbCruiseMinStart || (climbMin + 5), icon:'🔔', c:'wrn', type:'flight', title:cruiseTlTitle, desc:cruiseTlDesc});
+    tl.push({min:(turbCruiseMinStart || climbMin) + 1, icon:'🛡️', c:'ev', type:'always', title:'Sobre la turbulencia', desc:'Las turbulencias son incómodas pero no suponen ningún peligro para el avión. Los pilotos están tranquilos en cabina y, si pueden, adaptarán la ruta para reducir las molestias. Es importante mantener el cinturón abrochado en todo momento.'});
   } else {
-    tl.push({min:climbMin + 5, icon:'✈️', c:'ok', type:'flight', title:'Crucero sin turbulencias previstas', desc:'Una vez alcanzada la altitud de crucero, no se prevén nubes a la altura de vuelo.'});
+    tl.push({min:climbMin + 5, icon:'✈️', c:'ok', type:'flight', title:'Crucero sin turbulencias previstas', desc:'No se prevén turbulencias a la altura de vuelo.'});
   }
 
   if (dur > 90) tl.push({min:Math.round(dur*0.35), icon:'🍽️', c:'acc', type:'always', title:'Servicio a bordo', desc:'En algún momento del crucero, la tripulación comenzará el servicio de comidas y bebidas. El momento exacto depende de la aerolínea y las condiciones del vuelo.'});
