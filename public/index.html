@@ -546,66 +546,109 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
   var turbCruiseMinStart = null, turbCruiseMinEnd = null;
   var turbReasons = {climb:[], cruise:[], descent:[]};
 
-  // Climb: check origin layers thickness + surface wind + CAPE
+  // Climb: check origin layers by type + surface wind + CAPE
+  // Medium clouds (700-500hPa) = convective turbulence; Low clouds = calm; High = depends on shear
   for (var tc = 0; tc < originLayers.length; tc++) {
     var tcl = originLayers[tc];
-    if (tcl.maxCover > 70) turbClimb = Math.max(turbClimb, 2);
-    else if (tcl.maxCover > 40) turbClimb = Math.max(turbClimb, 1);
+    // Check if layer is medium-level (convective, ~3000-5500m)
+    var isMedium = (tcl.baseM >= 2000 && tcl.baseM <= 6000);
+    if (isMedium) {
+      if (tcl.maxCover > 70) { turbClimb = Math.max(turbClimb, 2); turbReasons.climb.push('nubes medias densas en ascenso'); }
+      else if (tcl.maxCover > 40) { turbClimb = Math.max(turbClimb, 1); turbReasons.climb.push('nubes medias en ascenso'); }
+    } else if (tcl.baseM > 6000) {
+      // High clouds — mild unless very dense
+      if (tcl.maxCover > 70) turbClimb = Math.max(turbClimb, 1);
+    }
+    // Low clouds (<2000m) = no turbulence contribution
   }
-  // Surface wind at origin (>30 km/h adds turbulence in first minutes)
+  // Surface wind at origin
   if (oW.ws > 40) { turbClimb = Math.max(turbClimb, 2); turbReasons.climb.push('viento fuerte en superficie'); }
-  else if (oW.ws > 30) { turbClimb = Math.max(turbClimb, 1); turbReasons.climb.push('viento moderado en superficie'); }
+  else if (oW.ws > 25) { turbClimb = Math.max(turbClimb, 1); turbReasons.climb.push('viento moderado en superficie'); }
   // CAPE at origin — convective instability during climb
   if (oW.cape > 1500) { turbClimb = Math.max(turbClimb, 3); turbReasons.climb.push('posibles tormentas en la zona'); }
   else if (oW.cape > 800) { turbClimb = Math.max(turbClimb, 2); turbReasons.climb.push('actividad convectiva en la zona'); }
 
-  // Cruise: check each route point — analyze clouds/CAPE/shear at the altitude the plane is at
-  // This covers climb-through, cruise, and descent-through turbulence
+  // Cruise: check each route point — FAA-based CAT thresholds
+  // Ref: FAA AC 00-30C — jet stream >110kt (204 km/h) + vertical shear >6kt/1000ft (~74 km/h over 500-300hPa)
+  // Combined: need BOTH high wind AND high shear for significant CAT
   var cruiseReasonSet = {};
   for (var rp = 0; rp < routeClouds.length; rp++) {
     var rc = routeClouds[rp];
     var rpMin = Math.round(rc.frac * dur);
-    // Skip very early (pre-takeoff) and very late (post-landing)
     if (rpMin < 2 || rpMin > dur - 2) continue;
-    // What altitude is the plane at this minute?
     var planeAlt = altAtMin(rpMin);
 
+    // --- Cloud turbulence at plane altitude ---
     if (rc.w.profile) {
       for (var pl = 0; pl < rc.w.profile.length; pl++) {
         var pLevel = rc.w.profile[pl];
-        // Check if this cloud level is within ±1500m of where the plane is
         if (Math.abs(pLevel.altM - planeAlt) < 1500 && pLevel.cover > 30) {
-          if (pLevel.cover > 60) turbCruise = Math.max(turbCruise, 2);
-          else turbCruise = Math.max(turbCruise, 1);
+          // Medium-level clouds (3000-6000m) = convective, more turbulent
+          var isMedCloud = (pLevel.altM >= 2000 && pLevel.altM <= 6000);
+          if (isMedCloud && pLevel.cover > 60) { turbCruise = Math.max(turbCruise, 2); cruiseReasonSet['nubes convectivas'] = true; }
+          else if (isMedCloud && pLevel.cover > 30) { turbCruise = Math.max(turbCruise, 1); cruiseReasonSet['nubes'] = true; }
+          else if (pLevel.cover > 60) { turbCruise = Math.max(turbCruise, 1); cruiseReasonSet['nubes'] = true; }
           if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin;
           turbCruiseMinEnd = rpMin;
-          cruiseReasonSet['nubes'] = true;
         }
       }
     }
-    // CAPE along route — thunderstorms (relevant at any altitude)
+
+    // --- CAPE along route — thunderstorms ---
     if (rc.w.cape > 2000) { turbCruise = Math.max(turbCruise, 3); cruiseReasonSet['tormentas en ruta'] = true; if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
     else if (rc.w.cape > 1000) { turbCruise = Math.max(turbCruise, 2); cruiseReasonSet['actividad convectiva'] = true; if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
-    // Wind shear — only relevant above FL200 (~6000m)
+
+    // --- CAT: Combined wind + shear (FAA-based) — only above FL200 (~6000m) ---
     if (planeAlt > 6000) {
-      if (rc.w.cruiseShear > 80) { turbCruise = Math.max(turbCruise, 3); cruiseReasonSet['vientos fuertes a nivel de crucero'] = true; if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
-      else if (rc.w.cruiseShear > 50) { turbCruise = Math.max(turbCruise, 2); cruiseReasonSet['vientos fuertes a nivel de crucero'] = true; if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
-      // Jet stream
-      if (rc.w.cruiseWind > 150) { turbCruise = Math.max(turbCruise, 2); cruiseReasonSet['corriente en chorro (jet stream)'] = true; }
+      var cWind = rc.w.cruiseWind;  // max wind at 300/250/200 hPa
+      var cShear = rc.w.cruiseShear; // shear between 500-300 hPa
+
+      // Level 3 (Media/Fuerte): jet >204 km/h AND shear >100 km/h
+      if (cWind > 204 && cShear > 100) {
+        turbCruise = Math.max(turbCruise, 3);
+        cruiseReasonSet['vientos muy fuertes en altura'] = true;
+        if (cWind > 250) cruiseReasonSet['corriente en chorro (jet stream)'] = true;
+        if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin;
+        turbCruiseMinEnd = rpMin;
+      }
+      // Level 2 (Baja/Media): jet >204 km/h AND shear >74 km/h (FAA 6kt/1000ft)
+      else if (cWind > 204 && cShear > 74) {
+        turbCruise = Math.max(turbCruise, 2);
+        cruiseReasonSet['vientos fuertes en altura'] = true;
+        if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin;
+        turbCruiseMinEnd = rpMin;
+      }
+      // Level 1 (Baja): wind >150 km/h AND shear >40 km/h
+      else if (cWind > 150 && cShear > 40) {
+        turbCruise = Math.max(turbCruise, 1);
+        cruiseReasonSet['viento moderado en altura'] = true;
+        if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin;
+        turbCruiseMinEnd = rpMin;
+      }
     }
   }
   turbReasons.cruise = Object.keys(cruiseReasonSet);
   var routeTurb = (turbCruise > 0);
 
-  // Descent: check destination layers thickness + surface wind + CAPE
+  // Descent: cloud-type aware + surface wind + CAPE
+  // Low clouds (<2000m) = niebla/stratus, no turbulence
+  // Medium clouds (2000-6000m) = convective, generates movement
+  // High clouds (>6000m) = mild unless combined with shear
   for (var td = 0; td < destLayers.length; td++) {
     var tdl = destLayers[td];
-    if (tdl.maxCover > 70) turbDescent = Math.max(turbDescent, 2);
-    else if (tdl.maxCover > 40) turbDescent = Math.max(turbDescent, 1);
+    var isMedDescent = (tdl.baseM >= 2000 && tdl.baseM <= 6000);
+    var isHighDescent = (tdl.baseM > 6000);
+    if (isMedDescent) {
+      if (tdl.maxCover > 70) { turbDescent = Math.max(turbDescent, 2); turbReasons.descent.push('nubes medias densas en descenso'); }
+      else if (tdl.maxCover > 40) { turbDescent = Math.max(turbDescent, 1); turbReasons.descent.push('nubes medias en descenso'); }
+    } else if (isHighDescent) {
+      if (tdl.maxCover > 70) { turbDescent = Math.max(turbDescent, 1); turbReasons.descent.push('nubes altas en descenso'); }
+    }
+    // Low clouds: no turbulence contribution (niebla, stratus)
   }
   // Surface wind at destination
   if (dW.ws > 40) { turbDescent = Math.max(turbDescent, 2); turbReasons.descent.push('viento fuerte en destino'); }
-  else if (dW.ws > 30) { turbDescent = Math.max(turbDescent, 1); turbReasons.descent.push('viento moderado en destino'); }
+  else if (dW.ws > 25) { turbDescent = Math.max(turbDescent, 1); turbReasons.descent.push('viento moderado en destino'); }
   // CAPE at destination
   if (dW.cape > 1500) { turbDescent = Math.max(turbDescent, 3); turbReasons.descent.push('posibles tormentas en destino'); }
   else if (dW.cape > 800) { turbDescent = Math.max(turbDescent, 2); turbReasons.descent.push('actividad convectiva en destino'); }
@@ -682,7 +725,11 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
   tl.push({min:-1, icon:'📢', c:'acc', type:'always', title:'Entrada en pista', desc:'Varía según cada aerolínea, pero los pilotos suelen avisar a la tripulación cuando están entrando en pista. Algo como: "Tripulación, entrando en pista para despegue". La tripulación toma asiento.'});
 
   // === TAKEOFF ===
-  tl.push({min:0, icon:'🛫', c:'acc', type:'flight', title:'Despegue — pista ' + depR.id, desc:'Dirección ' + card(depR.h) + '. Desde que escuchas el avión acelerar hasta que despega son aproximadamente 40-50 segundos.'});
+  var takeoffDesc = 'Dirección ' + card(depR.h) + '. Desde que escuchas el avión acelerar hasta que despega son aproximadamente 40-50 segundos.';
+  if (oW.ws > 25) {
+    takeoffDesc += ' Con viento de ' + oW.ws + ' km/h, podrás sentir cómo el avión hace pequeñas correcciones laterales, sobre todo de cola: es perfectamente normal, es el timón adaptándose a la situación del viento.';
+  }
+  tl.push({min:0, icon:'🛫', c:'acc', type:'flight', title:'Despegue — pista ' + depR.id, desc:takeoffDesc});
 
   tl.push({min:0.7, icon:'⚙️', c:'ev', type:'always', title:'Retracción del tren de aterrizaje', desc:'Unos segundos después de despegar escucharás un sonido mecánico seguido de un zumbido debajo del avión. Son las ruedas recogiéndose. Dura pocos segundos.'});
 
@@ -763,7 +810,11 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
 
   tl.push({min:dur-2, icon:'⚙️', c:'ev', type:'always', title:'Tren de aterrizaje desplegado', desc:'Escucharás un ruido bajo el avión: son las ruedas saliendo para el aterrizaje. El sonido dura unos segundos y es idéntico en todos los vuelos.'});
 
-  tl.push({min:dur, icon:'🛬', c:'ok', type:'flight', title:'Aterrizaje — pista ' + arrR.id, desc:'Toma de tierra en ' + tAP.city + '. Escucharás la reversa de empuje y verás los spoilers levantarse en el ala. Después, ~' + tAP.taxi + ' minutos de rodaje hasta la terminal.'});
+  var landDesc = 'Toma de tierra en ' + tAP.city + '. Escucharás la reversa de empuje y verás los spoilers levantarse en el ala. Después, ~' + tAP.taxi + ' minutos de rodaje hasta la terminal.';
+  if (dW.ws > 25) {
+    landDesc += ' Con viento de ' + dW.ws + ' km/h en destino, es posible que notes pequeñas correcciones laterales en la aproximación final. Los pilotos están perfectamente entrenados para esta situación.';
+  }
+  tl.push({min:dur, icon:'🛬', c:'ok', type:'flight', title:'Aterrizaje — pista ' + arrR.id, desc:landDesc});
 
   tl.sort(function(a,b){ return a.min - b.min; });
 
