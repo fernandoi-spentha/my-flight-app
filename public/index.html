@@ -1025,9 +1025,12 @@ function renderBriefing(b) {
   h += '<div style="flex:1;background:#0a0e1a;border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:#4a5873;margin-bottom:4px">Crucero</div><div style="font-size:13px;font-weight:500;color:' + turbColors[tp.cruise] + '">' + turbLabels[tp.cruise];
   if (tp.zones && tp.zones.length > 0) {
     var zoneStrs = [];
+    var cruiseDur2 = dur - b.climbMin - 22;
     for (var zd = 0; zd < tp.zones.length; zd++) {
       var z = tp.zones[zd];
+      var zSpan2 = z.endMin - z.startMin;
       if (z.startMin === z.endMin) zoneStrs.push('~min ' + z.startMin);
+      else if (tp.zones.length === 1 && zSpan2 > cruiseDur2 * 0.7) zoneStrs.push('mayor parte');
       else zoneStrs.push('min ' + z.startMin + '-' + z.endMin);
     }
     h += '<div style="font-size:10px;color:#4a5873;margin-top:2px">' + zoneStrs.join(', ') + '</div>';
@@ -1061,7 +1064,16 @@ function renderBriefing(b) {
     var cruiseWhyStr = cruiseWhy.length > 0 ? ' debido a ' + cruiseWhy.join(' y ') : '';
     if (tp.zones.length === 1) {
       var z1 = tp.zones[0];
-      var zTimeStr = z1.startMin === z1.endMin ? 'Sobre el minuto ' + z1.startMin : 'Entre el minuto ' + z1.startMin + ' y el ' + z1.endMin;
+      var zSpan = z1.endMin - z1.startMin;
+      var cruiseDur = dur - b.climbMin - 22;
+      var zTimeStr;
+      if (z1.startMin === z1.endMin) {
+        zTimeStr = 'Sobre el minuto ' + z1.startMin;
+      } else if (zSpan > cruiseDur * 0.7) {
+        zTimeStr = 'Durante la mayor parte del crucero (minutos ' + z1.startMin + ' a ' + z1.endMin + ')';
+      } else {
+        zTimeStr = 'Entre el minuto ' + z1.startMin + ' y el ' + z1.endMin;
+      }
       phases.push(zTimeStr + ', es probable turbulencia ' + turbLabelsLC[tp.cruise] + cruiseWhyStr + '. ' + (inCloudCruise ? 'Estarás dentro de nubes en parte de este tramo' : 'No estarás dentro de nubes'));
     } else {
       var zDescs = [];
@@ -1289,9 +1301,9 @@ function drawCloudChart(b) {
       var tx2 = xM(fracE * dur);
 
       var planeAltT = b.altAtMin(tpMin);
-      // Draw band around plane altitude ±2000m
-      var turbBot = Math.max(0, planeAltT - 2000);
-      var turbTop = Math.min(13000, planeAltT + 2000);
+      // Draw thin band around plane altitude ±800m
+      var turbBot = Math.max(0, planeAltT - 800);
+      var turbTop = Math.min(13000, planeAltT + 800);
       var turbAlpha = [0, 0.12, 0.20, 0.30, 0.40][tPts[ti].level];
       ctx.fillStyle = 'rgba(56,189,248,' + turbAlpha.toFixed(2) + ')';
       ctx.fillRect(tx1, yA(turbTop), tx2 - tx1, yA(turbBot) - yA(turbTop));
