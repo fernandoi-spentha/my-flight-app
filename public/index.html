@@ -572,14 +572,16 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
   else if (oW.cape > 800) { turbClimb = Math.max(turbClimb, 2); turbReasons.climb.push('actividad convectiva en la zona'); }
 
   // Cruise: check each route point — FAA-based CAT thresholds
-  // Ref: FAA AC 00-30C — jet stream >110kt (204 km/h) + vertical shear >6kt/1000ft (~74 km/h over 500-300hPa)
-  // Combined: need BOTH high wind AND high shear for significant CAT
+  // Each point gets its own turbulence level, then we merge into zones
   var cruiseReasonSet = {};
+  var turbPoints = []; // {min, level, reasons[]}
   for (var rp = 0; rp < routeClouds.length; rp++) {
     var rc = routeClouds[rp];
     var rpMin = Math.round(rc.frac * dur);
     if (rpMin < 2 || rpMin > dur - 2) continue;
     var planeAlt = altAtMin(rpMin);
+    var ptLevel = 0;
+    var ptReasons = [];
 
     // --- Cloud turbulence at plane altitude ---
     if (rc.w.profile) {
@@ -587,51 +589,69 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
         var pLevel = rc.w.profile[pl];
         if (Math.abs(pLevel.altM - planeAlt) < 1500 && pLevel.cover > 30) {
           var isMedCloud = (pLevel.altM >= 2000 && pLevel.altM <= 6000);
-          if (isMedCloud && pLevel.cover > 60) { turbCruise = Math.max(turbCruise, 2); cruiseReasonSet['nubes convectivas'] = true; }
-          else if (isMedCloud && pLevel.cover > 30) { turbCruise = Math.max(turbCruise, 1); cruiseReasonSet['nubes'] = true; }
-          else if (pLevel.cover > 60) { turbCruise = Math.max(turbCruise, 1); cruiseReasonSet['nubes'] = true; }
-          if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin;
-          turbCruiseMinEnd = rpMin;
+          if (isMedCloud && pLevel.cover > 60) { ptLevel = Math.max(ptLevel, 2); ptReasons.push('nubes convectivas'); }
+          else if (isMedCloud && pLevel.cover > 30) { ptLevel = Math.max(ptLevel, 1); ptReasons.push('nubes'); }
+          else if (pLevel.cover > 60) { ptLevel = Math.max(ptLevel, 1); ptReasons.push('nubes'); }
         }
       }
     }
 
     // --- CAPE along route — thunderstorms ---
     var rcCape = rc.w.cape || 0;
-    if (rcCape > 2000) { turbCruise = Math.max(turbCruise, 3); cruiseReasonSet['tormentas en ruta'] = true; if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
-    else if (rcCape > 1000) { turbCruise = Math.max(turbCruise, 2); cruiseReasonSet['actividad convectiva'] = true; if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
+    if (rcCape > 2000) { ptLevel = Math.max(ptLevel, 3); ptReasons.push('tormentas en ruta'); }
+    else if (rcCape > 1000) { ptLevel = Math.max(ptLevel, 2); ptReasons.push('actividad convectiva'); }
 
     // --- CAT: Combined wind + shear (FAA-based) — only above FL200 (~6000m) ---
     if (planeAlt > 6000) {
       var cWind = rc.w.cruiseWind || 0;
       var cShear = rc.w.cruiseShear || 0;
-
-      // Level 3 (Media/Fuerte): jet >204 km/h AND shear >100 km/h
       if (cWind > 204 && cShear > 100) {
-        turbCruise = Math.max(turbCruise, 3);
-        cruiseReasonSet['vientos fuertes en altura'] = true;
-        delete cruiseReasonSet['viento en altura'];
-        if (cWind > 250) cruiseReasonSet['corriente en chorro (jet stream)'] = true;
-        if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin;
-        turbCruiseMinEnd = rpMin;
+        ptLevel = Math.max(ptLevel, 3);
+        ptReasons.push('vientos fuertes en altura');
+        if (cWind > 250) ptReasons.push('corriente en chorro (jet stream)');
+      } else if (cWind > 204 && cShear > 74) {
+        ptLevel = Math.max(ptLevel, 2);
+        ptReasons.push('vientos fuertes en altura');
+      } else if (cWind > 150 && cShear > 40) {
+        ptLevel = Math.max(ptLevel, 1);
+        ptReasons.push('viento en altura');
       }
-      // Level 2 (Baja/Media): jet >204 km/h AND shear >74 km/h
-      else if (cWind > 204 && cShear > 74) {
-        turbCruise = Math.max(turbCruise, 2);
-        if (!cruiseReasonSet['vientos fuertes en altura']) cruiseReasonSet['vientos fuertes en altura'] = true;
-        delete cruiseReasonSet['viento en altura'];
-        if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin;
-        turbCruiseMinEnd = rpMin;
+    }
+
+    // Add reasons to global set
+    for (var pri = 0; pri < ptReasons.length; pri++) cruiseReasonSet[ptReasons[pri]] = true;
+    turbPoints.push({min: rpMin, level: ptLevel, reasons: ptReasons});
+    turbCruise = Math.max(turbCruise, ptLevel);
+  }
+
+  // Merge consecutive points into zones
+  var turbZones = [];
+  var zoneStart = null;
+  for (var zi = 0; zi < turbPoints.length; zi++) {
+    var tp2 = turbPoints[zi];
+    if (tp2.level > 0) {
+      if (zoneStart === null) {
+        zoneStart = {startMin: tp2.min, endMin: tp2.min, maxLevel: tp2.level, reasons: tp2.reasons.slice()};
+      } else {
+        zoneStart.endMin = tp2.min;
+        zoneStart.maxLevel = Math.max(zoneStart.maxLevel, tp2.level);
+        for (var zri = 0; zri < tp2.reasons.length; zri++) {
+          if (zoneStart.reasons.indexOf(tp2.reasons[zri]) < 0) zoneStart.reasons.push(tp2.reasons[zri]);
+        }
       }
-      // Level 1 (Baja): wind >150 km/h AND shear >40 km/h
-      else if (cWind > 150 && cShear > 40) {
-        turbCruise = Math.max(turbCruise, 1);
-        if (!cruiseReasonSet['vientos fuertes en altura']) cruiseReasonSet['viento en altura'] = true;
-        if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin;
-        turbCruiseMinEnd = rpMin;
+    } else {
+      if (zoneStart !== null) {
+        turbZones.push(zoneStart);
+        zoneStart = null;
       }
     }
   }
+  if (zoneStart !== null) turbZones.push(zoneStart);
+
+  // Legacy compat: cruiseMinStart/End from first/last zone
+  var turbCruiseMinStart = turbZones.length > 0 ? turbZones[0].startMin : null;
+  var turbCruiseMinEnd = turbZones.length > 0 ? turbZones[turbZones.length - 1].endMin : null;
+
   turbReasons.cruise = Object.keys(cruiseReasonSet);
   var routeTurb = (turbCruise > 0);
 
@@ -658,7 +678,7 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
   else if (dW.cape > 800) { turbDescent = Math.max(turbDescent, 2); turbReasons.descent.push('actividad convectiva en destino'); }
 
   var turbMax = Math.max(turbClimb, turbCruise, turbDescent);
-  var turbPhases = {climb: turbClimb, cruise: turbCruise, descent: turbDescent, max: turbMax, cruiseMinStart: turbCruiseMinStart, cruiseMinEnd: turbCruiseMinEnd, reasons: turbReasons};
+  var turbPhases = {climb: turbClimb, cruise: turbCruise, descent: turbDescent, max: turbMax, cruiseMinStart: turbCruiseMinStart, cruiseMinEnd: turbCruiseMinEnd, zones: turbZones, points: turbPoints, reasons: turbReasons};
 
   // Destination cloud layers for descent
   var dcEvents = [];
@@ -764,45 +784,45 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
 
   tl.push({min:climbMin, icon:'📋', c:'ev', type:'always', title:'Datos de crucero', desc:'Los aviones comerciales vuelan entre FL300 y FL400 (entre 9.000 y 12.000 metros). Siempre existe una separación vertical de 1.000 pies (300 metros) y horizontal con otros aviones. La altura exacta depende de la meteorología, el tráfico y el plan de vuelo. Durante el vuelo puede variar, por eso sentirás que el avión sube y/o baja ocasionalmente.'});
 
-  // Route turbulence timeline — multiple progressive reminders
+  // Route turbulence timeline — events per zone
   var turbLabelsLC2 = ['imperceptible', 'baja', 'baja/media', 'media/fuerte', 'fuerte'];
-  if (routeTurb || turbCruise > 0) {
-    var cruiseReasons = turbReasons.cruise;
-    var nonCloudReasons = cruiseReasons.filter(function(r) { return r !== 'nubes' && r !== 'nubes convectivas'; });
-    var reasonStr = nonCloudReasons.length > 0 ? nonCloudReasons.join(' y ') : 'condiciones atmosféricas';
-    var tStart = turbCruiseMinStart || climbMin;
-    var tEnd = turbCruiseMinEnd || (dur - 22);
-    var turbDuration = tEnd - tStart;
+  if (turbZones && turbZones.length > 0) {
+    for (var tz = 0; tz < turbZones.length; tz++) {
+      var zone = turbZones[tz];
+      var zReasonStr = zone.reasons.filter(function(r) { return r !== 'nubes' && r !== 'nubes convectivas'; });
+      var zReason = zReasonStr.length > 0 ? zReasonStr.join(' y ') : 'condiciones atmosféricas';
+      var zDur = zone.endMin - zone.startMin;
 
-    // 1. Entry: announce turbulence zone
-    var entryDesc = 'Entramos en una zona con turbulencia ' + turbLabelsLC2[turbCruise] + ' prevista, debido a ' + reasonStr + '.';
-    if (turbCruise >= 3) entryDesc += ' Es posible que sean las turbulencias más intensas del vuelo. Mantén el cinturón abrochado.';
-    else entryDesc += ' Mantén el cinturón abrochado.';
-    tl.push({min: tStart, icon:'🔔', c:'wrn', type:'flight', title:'Comienza zona de turbulencia' + (turbCruise >= 3 ? ' ⚠️' : ''), desc: entryDesc});
+      // Entry
+      var entryDesc = 'Entramos en una zona con turbulencia ' + turbLabelsLC2[zone.maxLevel] + ' prevista, debido a ' + zReason + '.';
+      if (zone.maxLevel >= 3) entryDesc += ' Mantén el cinturón abrochado.';
+      tl.push({min: zone.startMin, icon:'🔔', c:'wrn', type:'flight', title:'Comienza zona de turbulencia' + (turbZones.length > 1 ? ' (' + (tz+1) + '/' + turbZones.length + ')' : '') + (zone.maxLevel >= 3 ? ' ⚠️' : ''), desc: entryDesc});
 
-    // 2. Safety reminder right after
-    tl.push({min: tStart + 1, icon:'🛡️', c:'ev', type:'always', title:'Sobre la turbulencia', desc:'Las turbulencias son incómodas pero no suponen ningún peligro para el avión. Los pilotos están entrenados para esto y, si pueden, adaptarán la ruta o la altitud para reducir las molestias.'});
-
-    // 3. Mid-zone reminders every ~20 min if zone is long enough
-    if (turbDuration > 25) {
-      var reminderInterval = 20;
-      var reminderMin = tStart + reminderInterval;
-      var reminderCount = 0;
-      while (reminderMin < tEnd - 10 && reminderCount < 3) {
-        var remaining = tEnd - reminderMin;
-        var reminderDesc = 'Seguimos en la zona de turbulencia. ';
-        if (turbCruise >= 3) reminderDesc += 'Recuerda: es viento fuerte en altura, no hay tormenta. ';
-        reminderDesc += 'Se calma aproximadamente en ' + remaining + ' minutos (minuto ~' + tEnd + ' del vuelo).';
-        tl.push({min: reminderMin, icon:'💬', c:'wrn', type:'flight', title:'Recordatorio: turbulencia por viento', desc: reminderDesc});
-        reminderMin += reminderInterval;
-        reminderCount++;
+      // Safety reminder for first zone only
+      if (tz === 0) {
+        tl.push({min: zone.startMin + 1, icon:'🛡️', c:'ev', type:'always', title:'Sobre la turbulencia', desc:'Las turbulencias son incómodas pero no suponen ningún peligro para el avión. Los pilotos están entrenados para esto y, si pueden, adaptarán la ruta o la altitud para reducir las molestias.'});
       }
+
+      // Mid-zone reminders every ~20 min if zone is long
+      if (zDur > 25) {
+        var reminderInterval = 20;
+        var reminderMin = zone.startMin + reminderInterval;
+        var reminderCount = 0;
+        while (reminderMin < zone.endMin - 10 && reminderCount < 3) {
+          var remaining = zone.endMin - reminderMin;
+          var reminderDesc = 'Seguimos en la zona de turbulencia. ';
+          if (zone.maxLevel >= 3) reminderDesc += 'Recuerda: es viento fuerte en altura, no hay tormenta. ';
+          reminderDesc += 'Se calma en unos ' + remaining + ' minutos.';
+          tl.push({min: reminderMin, icon:'💬', c:'wrn', type:'flight', title:'Recordatorio: zona de turbulencia', desc: reminderDesc});
+          reminderMin += reminderInterval;
+          reminderCount++;
+        }
+      }
+
+      // Exit
+      tl.push({min: zone.endMin, icon:'✅', c:'ok', type:'flight', title:'Fin de zona de turbulencia' + (turbZones.length > 1 ? ' (' + (tz+1) + '/' + turbZones.length + ')' : ''), desc:'Salimos de la zona de turbulencia prevista.'});
     }
-
-    // 4. Exit: leaving turbulence zone
-    tl.push({min: tEnd, icon:'✅', c:'ok', type:'flight', title:'Fin de la zona de turbulencia', desc:'Salimos de la zona de turbulencia prevista. El resto del vuelo debería ser más tranquilo.'});
-
-  } else {
+  } else if (turbCruise === 0) {
     tl.push({min:climbMin + 5, icon:'✈️', c:'ok', type:'flight', title:'Crucero sin turbulencias previstas', desc:'No se prevén turbulencias a la altura de vuelo.'});
   }
 
@@ -1003,12 +1023,14 @@ function renderBriefing(b) {
   h += '<div style="margin-top:12px;display:flex;gap:8px">';
   h += '<div style="flex:1;background:#0a0e1a;border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:#4a5873;margin-bottom:4px">Ascenso</div><div style="font-size:13px;font-weight:500;color:' + turbColors[tp.climb] + '">' + turbLabels[tp.climb] + '</div></div>';
   h += '<div style="flex:1;background:#0a0e1a;border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:#4a5873;margin-bottom:4px">Crucero</div><div style="font-size:13px;font-weight:500;color:' + turbColors[tp.cruise] + '">' + turbLabels[tp.cruise];
-  if (tp.cruiseMinStart !== null && tp.cruise > 0) {
-    if (tp.cruiseMinStart === tp.cruiseMinEnd) {
-      h += '<div style="font-size:10px;color:#4a5873;margin-top:2px">~min ' + tp.cruiseMinStart + '</div>';
-    } else {
-      h += '<div style="font-size:10px;color:#4a5873;margin-top:2px">min ' + tp.cruiseMinStart + '-' + tp.cruiseMinEnd + '</div>';
+  if (tp.zones && tp.zones.length > 0) {
+    var zoneStrs = [];
+    for (var zd = 0; zd < tp.zones.length; zd++) {
+      var z = tp.zones[zd];
+      if (z.startMin === z.endMin) zoneStrs.push('~min ' + z.startMin);
+      else zoneStrs.push('min ' + z.startMin + '-' + z.endMin);
     }
+    h += '<div style="font-size:10px;color:#4a5873;margin-top:2px">' + zoneStrs.join(', ') + '</div>';
   }
   h += '</div></div>';
   h += '<div style="flex:1;background:#0a0e1a;border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:#4a5873;margin-bottom:4px">Descenso</div><div style="font-size:13px;font-weight:500;color:' + turbColors[tp.descent] + '">' + turbLabels[tp.descent] + '</div></div>';
@@ -1024,10 +1046,8 @@ function renderBriefing(b) {
     var climbWhy = tp.reasons.climb.length > 0 ? ' debido a ' + tp.reasons.climb.join(' y ') : '';
     phases.push('Durante el ascenso, es probable turbulencia ' + turbLabelsLC[tp.climb] + climbWhy);
   }
-  if (tp.cruise > 0 && tp.cruiseMinStart !== null) {
-    var cruiseWhy = tp.reasons.cruise.filter(function(r){return r !== 'nubes';});
-    var cruiseWhyStr = cruiseWhy.length > 0 ? ' debido a ' + cruiseWhy.join(' y ') : '';
-    // Check if in clouds or not at cruise
+  if (tp.cruise > 0 && tp.zones && tp.zones.length > 0) {
+    // Check if in clouds at cruise
     var inCloudCruise = false;
     for (var rci = 0; rci < b.routeClouds.length; rci++) {
       var rcw = b.routeClouds[rci];
@@ -1037,14 +1057,21 @@ function renderBriefing(b) {
         }
       }
     }
-    // Handle same start/end minute
-    var cruiseTimeStr;
-    if (tp.cruiseMinStart === tp.cruiseMinEnd) {
-      cruiseTimeStr = 'Sobre el minuto ' + tp.cruiseMinStart;
+    var cruiseWhy = tp.reasons.cruise.filter(function(r){return r !== 'nubes';});
+    var cruiseWhyStr = cruiseWhy.length > 0 ? ' debido a ' + cruiseWhy.join(' y ') : '';
+    if (tp.zones.length === 1) {
+      var z1 = tp.zones[0];
+      var zTimeStr = z1.startMin === z1.endMin ? 'Sobre el minuto ' + z1.startMin : 'Entre el minuto ' + z1.startMin + ' y el ' + z1.endMin;
+      phases.push(zTimeStr + ', es probable turbulencia ' + turbLabelsLC[tp.cruise] + cruiseWhyStr + '. ' + (inCloudCruise ? 'Estarás dentro de nubes en parte de este tramo' : 'No estarás dentro de nubes'));
     } else {
-      cruiseTimeStr = 'Entre el minuto ' + tp.cruiseMinStart + ' y el ' + tp.cruiseMinEnd;
+      var zDescs = [];
+      for (var zn = 0; zn < tp.zones.length; zn++) {
+        var zz = tp.zones[zn];
+        var zzTime = zz.startMin === zz.endMin ? 'minuto ~' + zz.startMin : 'minutos ' + zz.startMin + '-' + zz.endMin;
+        zDescs.push(zzTime + ' (' + turbLabelsLC[zz.maxLevel] + ')');
+      }
+      phases.push('Se prevén ' + tp.zones.length + ' zonas de turbulencia en crucero' + cruiseWhyStr + ': ' + zDescs.join(', ') + '. ' + (inCloudCruise ? 'Estarás dentro de nubes en parte del recorrido' : 'No estarás dentro de nubes'));
     }
-    phases.push(cruiseTimeStr + ', es probable turbulencia ' + turbLabelsLC[tp.cruise] + cruiseWhyStr + '. ' + (inCloudCruise ? 'Estarás dentro de nubes en parte de este tramo' : 'No estarás dentro de nubes'));
   } else if (tp.cruise > 0) {
     var cruiseWhy2 = tp.reasons.cruise.filter(function(r){return r !== 'nubes';});
     var cruiseWhyStr2 = cruiseWhy2.length > 0 ? ' debido a ' + cruiseWhy2.join(' y ') : '';
@@ -1240,44 +1267,34 @@ function drawCloudChart(b) {
   }
 
   // Draw aircraft trajectory line
-  // FIRST: Draw turbulence zones as blue bands along the flight path
-  if (b.turbPhases && b.turbPhases.cruiseMinStart !== null && b.turbPhases.cruise > 0) {
-    // For each route point, compute CAT level and draw band
+  // FIRST: Draw turbulence zones as blue bands using pre-computed points
+  if (b.turbPhases && b.turbPhases.points) {
+    var tPts = b.turbPhases.points;
     var rc2 = b.routeClouds;
-    if (rc2 && rc2.length > 0) {
-      for (var ti = 0; ti < rc2.length; ti++) {
-        var tp = rc2[ti];
-        var tpMin = Math.round(tp.frac * dur);
-        if (tpMin < 2 || tpMin > dur - 2) continue;
-        var planeAltT = b.altAtMin(tpMin);
-        if (planeAltT < 6000) continue; // Only above FL200
-
-        // Compute local turbulence level
-        var localTurb = 0;
-        var cW2 = tp.w.cruiseWind || 0;
-        var cS2 = tp.w.cruiseShear || 0;
-        if (cW2 > 204 && cS2 > 100) localTurb = 3;
-        else if (cW2 > 204 && cS2 > 74) localTurb = 2;
-        else if (cW2 > 150 && cS2 > 40) localTurb = 1;
-        if (tp.w.cape > 2000) localTurb = Math.max(localTurb, 3);
-        else if (tp.w.cape > 1000) localTurb = Math.max(localTurb, 2);
-
-        if (localTurb === 0) continue;
-
-        // Time span for this point
-        var fracS = (ti === 0) ? 0 : (rc2[ti-1].frac + tp.frac) / 2;
-        var fracE = (ti === rc2.length - 1) ? 1 : (tp.frac + rc2[ti+1].frac) / 2;
-        var tx1 = xM(fracS * dur);
-        var tx2 = xM(fracE * dur);
-
-        // Draw turbulence band: FL200 (~6000m) to FL400 (~12000m) range
-        var turbBot = 6000;
-        var turbTop = 12500;
-        var turbAlpha = [0, 0.12, 0.20, 0.30, 0.40][localTurb];
-        // Cyan/blue for turbulence, distinct from purple clouds
-        ctx.fillStyle = 'rgba(56,189,248,' + turbAlpha.toFixed(2) + ')';
-        ctx.fillRect(tx1, yA(turbTop), tx2 - tx1, yA(turbBot) - yA(turbTop));
+    for (var ti = 0; ti < tPts.length; ti++) {
+      if (tPts[ti].level === 0) continue;
+      var tpMin = tPts[ti].min;
+      // Find matching route cloud point for frac
+      var tpFrac = tpMin / dur;
+      // Find nearest routeCloud index
+      var bestRci = 0;
+      var bestDist = Infinity;
+      for (var rci2 = 0; rci2 < rc2.length; rci2++) {
+        var d2 = Math.abs(rc2[rci2].frac - tpFrac);
+        if (d2 < bestDist) { bestDist = d2; bestRci = rci2; }
       }
+      var fracS = (bestRci === 0) ? 0 : (rc2[bestRci-1].frac + rc2[bestRci].frac) / 2;
+      var fracE = (bestRci === rc2.length - 1) ? 1 : (rc2[bestRci].frac + rc2[bestRci+1].frac) / 2;
+      var tx1 = xM(fracS * dur);
+      var tx2 = xM(fracE * dur);
+
+      var planeAltT = b.altAtMin(tpMin);
+      // Draw band around plane altitude ±2000m
+      var turbBot = Math.max(0, planeAltT - 2000);
+      var turbTop = Math.min(13000, planeAltT + 2000);
+      var turbAlpha = [0, 0.12, 0.20, 0.30, 0.40][tPts[ti].level];
+      ctx.fillStyle = 'rgba(56,189,248,' + turbAlpha.toFixed(2) + ')';
+      ctx.fillRect(tx1, yA(turbTop), tx2 - tx1, yA(turbBot) - yA(turbTop));
     }
   }
 
