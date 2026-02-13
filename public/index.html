@@ -547,19 +547,22 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
   var turbReasons = {climb:[], cruise:[], descent:[]};
 
   // Climb: check origin layers by type + surface wind + CAPE
-  // Medium clouds (700-500hPa) = convective turbulence; Low clouds = calm; High = depends on shear
+  // Any cloud layer >70% = at least Baja (you always feel something going through dense clouds)
+  // Medium clouds (700-500hPa) = convective, more turbulence; Low = calm; High = mild
   for (var tc = 0; tc < originLayers.length; tc++) {
     var tcl = originLayers[tc];
-    // Check if layer is medium-level (convective, ~3000-5500m)
     var isMedium = (tcl.baseM >= 2000 && tcl.baseM <= 6000);
-    if (isMedium) {
-      if (tcl.maxCover > 70) { turbClimb = Math.max(turbClimb, 2); turbReasons.climb.push('nubes medias densas en ascenso'); }
-      else if (tcl.maxCover > 40) { turbClimb = Math.max(turbClimb, 1); turbReasons.climb.push('nubes medias en ascenso'); }
-    } else if (tcl.baseM > 6000) {
-      // High clouds — mild unless very dense
-      if (tcl.maxCover > 70) turbClimb = Math.max(turbClimb, 1);
+    var isLow = (tcl.baseM < 2000);
+    if (isLow) {
+      // Low clouds: very mild, but dense layers still noticeable
+      if (tcl.maxCover > 90) { turbClimb = Math.max(turbClimb, 1); }
+    } else if (isMedium) {
+      if (tcl.maxCover > 70) { turbClimb = Math.max(turbClimb, 2); turbReasons.climb.push('nubes densas en ascenso'); }
+      else if (tcl.maxCover > 40) { turbClimb = Math.max(turbClimb, 1); turbReasons.climb.push('nubes en ascenso'); }
+    } else {
+      // High clouds — any >70% = at least baja
+      if (tcl.maxCover > 70) { turbClimb = Math.max(turbClimb, 1); turbReasons.climb.push('nubes altas en ascenso'); }
     }
-    // Low clouds (<2000m) = no turbulence contribution
   }
   // Surface wind at origin
   if (oW.ws > 40) { turbClimb = Math.max(turbClimb, 2); turbReasons.climb.push('viento fuerte en superficie'); }
@@ -606,7 +609,8 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
       // Level 3 (Media/Fuerte): jet >204 km/h AND shear >100 km/h
       if (cWind > 204 && cShear > 100) {
         turbCruise = Math.max(turbCruise, 3);
-        cruiseReasonSet['vientos muy fuertes en altura'] = true;
+        cruiseReasonSet['vientos fuertes en altura'] = true;
+        delete cruiseReasonSet['viento en altura']; // remove weaker reason
         if (cWind > 250) cruiseReasonSet['corriente en chorro (jet stream)'] = true;
         if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin;
         turbCruiseMinEnd = rpMin;
@@ -614,14 +618,15 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
       // Level 2 (Baja/Media): jet >204 km/h AND shear >74 km/h (FAA 6kt/1000ft)
       else if (cWind > 204 && cShear > 74) {
         turbCruise = Math.max(turbCruise, 2);
-        cruiseReasonSet['vientos fuertes en altura'] = true;
+        if (!cruiseReasonSet['vientos fuertes en altura']) cruiseReasonSet['vientos fuertes en altura'] = true;
+        delete cruiseReasonSet['viento en altura'];
         if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin;
         turbCruiseMinEnd = rpMin;
       }
       // Level 1 (Baja): wind >150 km/h AND shear >40 km/h
       else if (cWind > 150 && cShear > 40) {
         turbCruise = Math.max(turbCruise, 1);
-        cruiseReasonSet['viento moderado en altura'] = true;
+        if (!cruiseReasonSet['vientos fuertes en altura']) cruiseReasonSet['viento en altura'] = true;
         if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin;
         turbCruiseMinEnd = rpMin;
       }
@@ -631,20 +636,19 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
   var routeTurb = (turbCruise > 0);
 
   // Descent: cloud-type aware + surface wind + CAPE
-  // Low clouds (<2000m) = niebla/stratus, no turbulence
-  // Medium clouds (2000-6000m) = convective, generates movement
-  // High clouds (>6000m) = mild unless combined with shear
+  // Any cloud layer >70% = at least Baja (always some movement through dense clouds)
   for (var td = 0; td < destLayers.length; td++) {
     var tdl = destLayers[td];
     var isMedDescent = (tdl.baseM >= 2000 && tdl.baseM <= 6000);
-    var isHighDescent = (tdl.baseM > 6000);
-    if (isMedDescent) {
-      if (tdl.maxCover > 70) { turbDescent = Math.max(turbDescent, 2); turbReasons.descent.push('nubes medias densas en descenso'); }
-      else if (tdl.maxCover > 40) { turbDescent = Math.max(turbDescent, 1); turbReasons.descent.push('nubes medias en descenso'); }
-    } else if (isHighDescent) {
+    var isLowDescent = (tdl.baseM < 2000);
+    if (isLowDescent) {
+      if (tdl.maxCover > 90) { turbDescent = Math.max(turbDescent, 1); }
+    } else if (isMedDescent) {
+      if (tdl.maxCover > 70) { turbDescent = Math.max(turbDescent, 2); turbReasons.descent.push('nubes densas en descenso'); }
+      else if (tdl.maxCover > 40) { turbDescent = Math.max(turbDescent, 1); turbReasons.descent.push('nubes en descenso'); }
+    } else {
       if (tdl.maxCover > 70) { turbDescent = Math.max(turbDescent, 1); turbReasons.descent.push('nubes altas en descenso'); }
     }
-    // Low clouds: no turbulence contribution (niebla, stratus)
   }
   // Surface wind at destination
   if (dW.ws > 40) { turbDescent = Math.max(turbDescent, 2); turbReasons.descent.push('viento fuerte en destino'); }
@@ -1083,6 +1087,12 @@ function renderBriefing(b) {
   h += '<span style="display:inline-block;width:16px;height:10px;border-radius:2px;background:rgba(167,139,250,.35)"></span><span>40%</span>';
   h += '<span style="display:inline-block;width:16px;height:10px;border-radius:2px;background:rgba(167,139,250,.55)"></span><span>70%</span>';
   h += '<span style="display:inline-block;width:16px;height:10px;border-radius:2px;background:rgba(167,139,250,.7)"></span><span>100%</span>';
+  h += '</div>';
+  h += '<div style="margin-top:4px;display:flex;align-items:center;justify-content:center;gap:4px;font-size:10px;color:#4a5873">';
+  h += '<span>Turbulencia:</span>';
+  h += '<span style="display:inline-block;width:16px;height:10px;border-radius:2px;background:rgba(56,189,248,.12)"></span><span>Baja</span>';
+  h += '<span style="display:inline-block;width:16px;height:10px;border-radius:2px;background:rgba(56,189,248,.20)"></span><span>Baja/Media</span>';
+  h += '<span style="display:inline-block;width:16px;height:10px;border-radius:2px;background:rgba(56,189,248,.30)"></span><span>Media/Fuerte</span>';
   h += '</div>';
   h += '</div>';
 
