@@ -575,11 +575,13 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
   // Ref: FAA AC 00-30C — jet stream >110kt (204 km/h) + vertical shear >6kt/1000ft (~74 km/h over 500-300hPa)
   // Combined: need BOTH high wind AND high shear for significant CAT
   var cruiseReasonSet = {};
+  var _turbDbg = [];
   for (var rp = 0; rp < routeClouds.length; rp++) {
     var rc = routeClouds[rp];
     var rpMin = Math.round(rc.frac * dur);
     if (rpMin < 2 || rpMin > dur - 2) continue;
     var planeAlt = altAtMin(rpMin);
+    var _dbgEntry = {min:rpMin, alt:Math.round(planeAlt), wind:rc.w.cruiseWind, shear:rc.w.cruiseShear, cape:rc.w.cape, hit:[]};
 
     // --- Cloud turbulence at plane altitude ---
     if (rc.w.profile) {
@@ -588,9 +590,9 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
         if (Math.abs(pLevel.altM - planeAlt) < 1500 && pLevel.cover > 30) {
           // Medium-level clouds (3000-6000m) = convective, more turbulent
           var isMedCloud = (pLevel.altM >= 2000 && pLevel.altM <= 6000);
-          if (isMedCloud && pLevel.cover > 60) { turbCruise = Math.max(turbCruise, 2); cruiseReasonSet['nubes convectivas'] = true; }
-          else if (isMedCloud && pLevel.cover > 30) { turbCruise = Math.max(turbCruise, 1); cruiseReasonSet['nubes'] = true; }
-          else if (pLevel.cover > 60) { turbCruise = Math.max(turbCruise, 1); cruiseReasonSet['nubes'] = true; }
+          if (isMedCloud && pLevel.cover > 60) { turbCruise = Math.max(turbCruise, 2); cruiseReasonSet['nubes convectivas'] = true; _dbgEntry.hit.push('MedCloud>60%@'+pLevel.altM+'m=2'); }
+          else if (isMedCloud && pLevel.cover > 30) { turbCruise = Math.max(turbCruise, 1); cruiseReasonSet['nubes'] = true; _dbgEntry.hit.push('MedCloud>30%@'+pLevel.altM+'m=1'); }
+          else if (pLevel.cover > 60) { turbCruise = Math.max(turbCruise, 1); cruiseReasonSet['nubes'] = true; _dbgEntry.hit.push('Cloud>60%@'+pLevel.altM+'m=1'); }
           if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin;
           turbCruiseMinEnd = rpMin;
         }
@@ -598,31 +600,32 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
     }
 
     // --- CAPE along route — thunderstorms ---
-    if (rc.w.cape > 2000) { turbCruise = Math.max(turbCruise, 3); cruiseReasonSet['tormentas en ruta'] = true; if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
-    else if (rc.w.cape > 1000) { turbCruise = Math.max(turbCruise, 2); cruiseReasonSet['actividad convectiva'] = true; if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
+    if (rc.w.cape > 2000) { turbCruise = Math.max(turbCruise, 3); cruiseReasonSet['tormentas en ruta'] = true; _dbgEntry.hit.push('CAPE>2000=3'); if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
+    else if (rc.w.cape > 1000) { turbCruise = Math.max(turbCruise, 2); cruiseReasonSet['actividad convectiva'] = true; _dbgEntry.hit.push('CAPE>1000=2'); if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin; turbCruiseMinEnd = rpMin; }
 
     // --- CAT: Combined wind + shear (FAA-based) — only above FL200 (~6000m) ---
     if (planeAlt > 6000) {
       var cWind = rc.w.cruiseWind;  // max wind at 300/250/200 hPa
       var cShear = rc.w.cruiseShear; // shear between 500-300 hPa
-      console.log('[TURB DEBUG] min=' + rpMin + ' alt=' + Math.round(planeAlt) + ' wind=' + cWind + ' shear=' + cShear + ' cape=' + rc.w.cape + ' fcstHr=' + rc.w.forecastHour);
 
       // Level 3 (Media/Fuerte): jet >204 km/h AND shear >100 km/h
       if (cWind > 204 && cShear > 100) {
         turbCruise = Math.max(turbCruise, 3);
         cruiseReasonSet['vientos fuertes en altura'] = true;
-        delete cruiseReasonSet['viento en altura']; // remove weaker reason
+        delete cruiseReasonSet['viento en altura'];
         if (cWind > 250) cruiseReasonSet['corriente en chorro (jet stream)'] = true;
         if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin;
         turbCruiseMinEnd = rpMin;
+        _dbgEntry.hit.push('CAT-L3=3');
       }
-      // Level 2 (Baja/Media): jet >204 km/h AND shear >74 km/h (FAA 6kt/1000ft)
+      // Level 2 (Baja/Media): jet >204 km/h AND shear >74 km/h
       else if (cWind > 204 && cShear > 74) {
         turbCruise = Math.max(turbCruise, 2);
         if (!cruiseReasonSet['vientos fuertes en altura']) cruiseReasonSet['vientos fuertes en altura'] = true;
         delete cruiseReasonSet['viento en altura'];
         if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin;
         turbCruiseMinEnd = rpMin;
+        _dbgEntry.hit.push('CAT-L2=2');
       }
       // Level 1 (Baja): wind >150 km/h AND shear >40 km/h
       else if (cWind > 150 && cShear > 40) {
@@ -630,9 +633,14 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
         if (!cruiseReasonSet['vientos fuertes en altura']) cruiseReasonSet['viento en altura'] = true;
         if (turbCruiseMinStart === null) turbCruiseMinStart = rpMin;
         turbCruiseMinEnd = rpMin;
+        _dbgEntry.hit.push('CAT-L1=1');
       }
     }
+    _dbgEntry.levelNow = turbCruise;
+    _turbDbg.push(_dbgEntry);
   }
+  console.log('[TURB DEBUG] Final cruise level: ' + turbCruise);
+  console.table(_turbDbg);
   turbReasons.cruise = Object.keys(cruiseReasonSet);
   var routeTurb = (turbCruise > 0);
 
