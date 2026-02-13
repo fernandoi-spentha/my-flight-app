@@ -605,6 +605,7 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
     if (planeAlt > 6000) {
       var cWind = rc.w.cruiseWind;  // max wind at 300/250/200 hPa
       var cShear = rc.w.cruiseShear; // shear between 500-300 hPa
+      console.log('[TURB DEBUG] min=' + rpMin + ' alt=' + Math.round(planeAlt) + ' wind=' + cWind + ' shear=' + cShear + ' cape=' + rc.w.cape + ' fcstHr=' + rc.w.forecastHour);
 
       // Level 3 (Media/Fuerte): jet >204 km/h AND shear >100 km/h
       if (cWind > 204 && cShear > 100) {
