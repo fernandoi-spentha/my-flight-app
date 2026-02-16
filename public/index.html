@@ -1065,7 +1065,7 @@ function renderBriefing(b) {
     if (tp.zones.length === 1) {
       var z1 = tp.zones[0];
       var zSpan = z1.endMin - z1.startMin;
-      var cruiseDur = dur - b.climbMin - 22;
+      var cruiseDur = b.dur - b.climbMin - 22;
       var zTimeStr;
       if (z1.startMin === z1.endMin) {
         zTimeStr = 'Sobre el minuto ' + z1.startMin;
