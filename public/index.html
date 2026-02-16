@@ -1025,7 +1025,7 @@ function renderBriefing(b) {
   h += '<div style="flex:1;background:#0a0e1a;border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:#4a5873;margin-bottom:4px">Crucero</div><div style="font-size:13px;font-weight:500;color:' + turbColors[tp.cruise] + '">' + turbLabels[tp.cruise];
   if (tp.zones && tp.zones.length > 0) {
     var zoneStrs = [];
-    var cruiseDur2 = dur - b.climbMin - 22;
+    var cruiseDur2 = b.dur - b.climbMin - 22;
     for (var zd = 0; zd < tp.zones.length; zd++) {
       var z = tp.zones[zd];
       var zSpan2 = z.endMin - z.startMin;
@@ -1395,7 +1395,7 @@ async function analyze() {
           else if (dur < 90) cruiseFl = 320;
           else if (dur < 150) cruiseFl = 360;
           else cruiseFl = 380;
-          fl = { al: apiData.flight.airline || code.substring(0,2), from: apiData.departure.iata, to: apiData.arrival.iata, dur: dur, ac: apiData.aircraft.type || 'A320', fl: cruiseFl, depTime: apiData.departure.scheduledLocal, arrTime: apiData.arrival.scheduledLocal, depTz: apiData.departure.timezone, arrTz: apiData.arrival.timezone };
+          fl = { al: apiData.flight.airline || code.substring(0,2), from: apiData.departure.iata, to: apiData.arrival.iata, dur: dur, ac: apiData.aircraft.type || 'A320', fl: cruiseFl, depTime: apiData.departure.scheduledLocal, arrTime: apiData.arrival.scheduledLocal, depTz: apiData.departure.timezone, arrTz: apiData.arrival.timezone, serverWeather: apiData.weather || null };
           if (!AP[fl.from] && apiData.departure.lat) {
             AP[fl.from] = { name: apiData.departure.name, city: apiData.departure.name, lat: apiData.departure.lat, lon: apiData.departure.lon, taxi: 10, dep: function(wd,ws){ if(ws<5)return{id:'01',h:10}; if(wd>=315||wd<45)return{id:'36',h:360}; if(wd>=45&&wd<135)return{id:'09',h:90}; if(wd>=135&&wd<225)return{id:'18',h:180}; return{id:'27',h:270}; }, arr: function(wd,ws){ if(ws<5)return{id:'01',h:10}; if(wd>=315||wd<45)return{id:'36',h:360}; if(wd>=45&&wd<135)return{id:'09',h:90}; if(wd>=135&&wd<225)return{id:'18',h:180}; return{id:'27',h:270}; } };
           }
@@ -1427,12 +1427,14 @@ async function analyze() {
   await delay(400);
   document.getElementById(steps[0]).className = 'step ok';
 
-  // Step 2 & 3: fetch real weather (in parallel with animation)
+  // Step 2 & 3: weather data (prefer server-side, fallback to client)
   document.getElementById(steps[1]).className = 'step on';
-  var weatherData = null;
-  try {
-    weatherData = await fetchRouteWeather(fAP, tAP, fl.depTime, fl.dur);
-  } catch(e) { console.log('Weather fetch failed, using simulated', e); }
+  var weatherData = fl.serverWeather || null;
+  if (!weatherData) {
+    try {
+      weatherData = await fetchRouteWeather(fAP, tAP, fl.depTime, fl.dur);
+    } catch(e) { console.log('Weather fetch failed, using simulated', e); }
+  }
   document.getElementById(steps[1]).className = 'step ok';
 
   document.getElementById(steps[2]).className = 'step on';
