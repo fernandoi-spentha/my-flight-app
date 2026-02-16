@@ -753,7 +753,7 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
   if (oW.ws > 25) {
     takeoffDesc += ' Con viento de ' + oW.ws + ' km/h, podrás sentir cómo el avión hace pequeñas correcciones laterales, sobre todo de cola: es perfectamente normal, es el timón adaptándose a la situación del viento.';
   }
-  tl.push({min:0, icon:'🛫', c:'acc', type:'flight', title:'Despegue — pista ' + depR.id, desc:takeoffDesc});
+  tl.push({min:0, icon:'🛫', c:'acc', type:'flight', title:'Despegue' + (fAP.genericRwy ? '' : ' — pista ' + depR.id), desc:takeoffDesc});
 
   tl.push({min:0.7, icon:'⚙️', c:'ev', type:'always', title:'Retracción del tren de aterrizaje', desc:'Unos segundos después de despegar escucharás un sonido mecánico seguido de un zumbido debajo del avión. Son las ruedas recogiéndose. Dura pocos segundos.'});
 
@@ -855,14 +855,16 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
   if (dW.ws > 25) {
     landDesc += ' Con viento de ' + dW.ws + ' km/h en destino, es posible que notes pequeñas correcciones laterales en la aproximación final. Los pilotos están perfectamente entrenados para esta situación.';
   }
-  tl.push({min:dur, icon:'🛬', c:'ok', type:'flight', title:'Aterrizaje — pista ' + arrR.id, desc:landDesc});
+  tl.push({min:dur, icon:'🛬', c:'ok', type:'flight', title:'Aterrizaje' + (tAP.genericRwy ? '' : ' — pista ' + arrR.id), desc:landDesc});
 
   tl.sort(function(a,b){ return a.min - b.min; });
 
   // (Old separate "lo que siempre pasa" timeline removed — now unified)
 
   // ---- NARRATIVE ----
-  var narr = 'Vas a despegar probablemente por la <span class="hi">pista ' + depR.id + '</span> con dirección ' + card(depR.h) + '.';
+  var narr = fAP.genericRwy
+    ? 'Vas a despegar con dirección ' + card(depR.h) + '.'
+    : 'Vas a despegar probablemente por la <span class="hi">pista ' + depR.id + '</span> con dirección ' + card(depR.h) + '.';
   narr += ' A los pocos minutos, el avión girará para tomar rumbo hacia <span class="hi">' + tAP.city + '</span>.';
 
   // Climb cloud narrative
@@ -900,7 +902,9 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
   } else {
     narr += ' <span class="hg">el cielo está despejado</span> — podrás ver la aproximación completa.';
   }
-  narr += ' Aterrizarás por la <span class="hi">pista ' + arrR.id + '</span>, con aproximadamente ' + tAP.taxi + ' minutos de rodaje hasta la terminal.';
+  narr += tAP.genericRwy
+    ? ' El rodaje hasta la terminal dura aproximadamente ' + tAP.taxi + ' minutos.'
+    : ' Aterrizarás por la <span class="hi">pista ' + arrR.id + '</span>, con aproximadamente ' + tAP.taxi + ' minutos de rodaje hasta la terminal.';
 
   // Seat
   var sN = '';
@@ -1397,10 +1401,10 @@ async function analyze() {
           else cruiseFl = 380;
           fl = { al: apiData.flight.airline || code.substring(0,2), from: apiData.departure.iata, to: apiData.arrival.iata, dur: dur, ac: apiData.aircraft.type || 'A320', fl: cruiseFl, depTime: apiData.departure.scheduledLocal, arrTime: apiData.arrival.scheduledLocal, depTz: apiData.departure.timezone, arrTz: apiData.arrival.timezone, serverWeather: apiData.weather || null };
           if (!AP[fl.from] && apiData.departure.lat) {
-            AP[fl.from] = { name: apiData.departure.name, city: apiData.departure.name, lat: apiData.departure.lat, lon: apiData.departure.lon, taxi: 10, dep: function(wd,ws){ if(ws<5)return{id:'01',h:10}; if(wd>=315||wd<45)return{id:'36',h:360}; if(wd>=45&&wd<135)return{id:'09',h:90}; if(wd>=135&&wd<225)return{id:'18',h:180}; return{id:'27',h:270}; }, arr: function(wd,ws){ if(ws<5)return{id:'01',h:10}; if(wd>=315||wd<45)return{id:'36',h:360}; if(wd>=45&&wd<135)return{id:'09',h:90}; if(wd>=135&&wd<225)return{id:'18',h:180}; return{id:'27',h:270}; } };
+            AP[fl.from] = { name: apiData.departure.name, city: apiData.departure.name, lat: apiData.departure.lat, lon: apiData.departure.lon, taxi: 10, genericRwy: true, dep: function(wd,ws){ var h=Math.round(wd/10)*10; if(h===0)h=360; var id=String(Math.round(h/10)).padStart(2,'0'); return{id:id,h:h}; }, arr: function(wd,ws){ var h=Math.round(wd/10)*10; if(h===0)h=360; var id=String(Math.round(h/10)).padStart(2,'0'); return{id:id,h:h}; } };
           }
           if (!AP[fl.to] && apiData.arrival.lat) {
-            AP[fl.to] = { name: apiData.arrival.name, city: apiData.arrival.name, lat: apiData.arrival.lat, lon: apiData.arrival.lon, taxi: 10, dep: function(wd,ws){ if(ws<5)return{id:'01',h:10}; if(wd>=315||wd<45)return{id:'36',h:360}; if(wd>=45&&wd<135)return{id:'09',h:90}; if(wd>=135&&wd<225)return{id:'18',h:180}; return{id:'27',h:270}; }, arr: function(wd,ws){ if(ws<5)return{id:'01',h:10}; if(wd>=315||wd<45)return{id:'36',h:360}; if(wd>=45&&wd<135)return{id:'09',h:90}; if(wd>=135&&wd<225)return{id:'18',h:180}; return{id:'27',h:270}; } };
+            AP[fl.to] = { name: apiData.arrival.name, city: apiData.arrival.name, lat: apiData.arrival.lat, lon: apiData.arrival.lon, taxi: 10, genericRwy: true, dep: function(wd,ws){ var h=Math.round(wd/10)*10; if(h===0)h=360; var id=String(Math.round(h/10)).padStart(2,'0'); return{id:id,h:h}; }, arr: function(wd,ws){ var h=Math.round(wd/10)*10; if(h===0)h=360; var id=String(Math.round(h/10)).padStart(2,'0'); return{id:id,h:h}; } };
           }
         }
       }
@@ -1418,6 +1422,15 @@ async function analyze() {
   var acCode = (acSel !== 'auto') ? acSel : fl.ac;
   var fAP = AP[fl.from];
   var tAP = AP[fl.to];
+
+  if (!fAP || !tAP) {
+    var inp = document.getElementById('inFlight');
+    inp.style.borderColor = '#f87171';
+    inp.value = '';
+    inp.placeholder = 'Aeropuerto no soportado';
+    setTimeout(function(){ inp.style.borderColor = ''; inp.placeholder = 'Ej: IB651'; }, 3000);
+    return;
+  }
 
   showScr('S2', 'S1', 'f');
 
