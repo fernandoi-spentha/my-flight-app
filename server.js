@@ -190,7 +190,13 @@ async function fetchPointWeather(lat, lon, targetDate) {
       forecastHour: h.time[bestIdx],
       cape: Math.round(cape),
       liftedIdx: Math.round(liftedIdx),
-      cruiseShear: Math.round(Math.abs(ws300 - ws500)),
+      // Shear: max of adjacent-layer differences near cruise altitude
+      // 200-250hPa (~11800-10400m), 250-300hPa (~10400-9200m), 300-500hPa (~9200-5500m)
+      cruiseShear: Math.round(Math.max(
+        Math.abs(ws200 - ws250),
+        Math.abs(ws250 - ws300),
+        Math.abs(ws300 - ws500) * 0.5  // scale down because 3700m span vs ~1200m for the others
+      )),
       cruiseWind: Math.round(Math.max(ws300, ws250, ws200)),
       lowWind: Math.round(ws850)
     };
