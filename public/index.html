@@ -606,20 +606,24 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
     if (rcCape > 2000) { ptLevel = Math.max(ptLevel, 3); ptReasons.push('tormentas en ruta'); }
     else if (rcCape > 1000) { ptLevel = Math.max(ptLevel, 2); ptReasons.push('actividad convectiva'); }
 
-    // --- CAT: Combined wind + shear (FAA-based) — only above FL200 (~6000m) ---
+    // --- CAT: Combined wind + shear — only above FL200 (~6000m) ---
+    // Shear is now max of adjacent pressure level differences (~1200m apart)
     if (planeAlt > 6000) {
       var cWind = rc.w.cruiseWind || 0;
       var cShear = rc.w.cruiseShear || 0;
-      if (cWind > 204 && cShear > 100) {
+      if (cWind > 190 && cShear > 40) {
         ptLevel = Math.max(ptLevel, 3);
         ptReasons.push('vientos fuertes en altura');
         if (cWind > 250) ptReasons.push('corriente en chorro (jet stream)');
-      } else if (cWind > 204 && cShear > 74) {
+      } else if (cWind > 150 && cShear > 30) {
         ptLevel = Math.max(ptLevel, 2);
         ptReasons.push('vientos fuertes en altura');
-      } else if (cWind > 150 && cShear > 40) {
+      } else if (cWind > 120 && cShear > 20) {
         ptLevel = Math.max(ptLevel, 1);
         ptReasons.push('viento en altura');
+      } else if (cWind > 100 && cShear > 15) {
+        ptLevel = Math.max(ptLevel, 1);
+        ptReasons.push('gradiente de viento');
       }
     }
 
