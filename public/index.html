@@ -13,7 +13,7 @@ body{
   font-family:-apple-system,system-ui,'Helvetica Neue',sans-serif;
   background:#0a0e1a;color:#e8edf5;-webkit-font-smoothing:antialiased;
 }
-.app{height:100%;width:100%;max-width:430px;margin:0 auto;position:relative;overflow:hidden}
+.app{height:100%;width:100%;max-width:520px;margin:0 auto;position:relative;overflow:hidden}
 
 /* Screens */
 .scr{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;padding:20px;padding-top:calc(env(safe-area-inset-top,0px) + 20px);padding-bottom:calc(env(safe-area-inset-bottom,0px) + 20px);-webkit-overflow-scrolling:touch;transition:transform .4s ease,opacity .4s ease}
@@ -151,25 +151,27 @@ body{
 @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
 
 /* Phase tabs for timeline */
-.phase-tabs{display:flex;gap:4px;margin-bottom:16px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.phase-tabs{display:flex;gap:8px;margin-bottom:16px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:2px 0}
 .phase-tabs::-webkit-scrollbar{display:none}
-.phase-tab{flex:1;min-width:0;padding:10px 6px;border:1px solid rgba(78,158,255,.1);border-radius:10px;background:#0d1220;cursor:pointer;text-align:center;transition:all .25s;white-space:nowrap}
+.phase-tab{flex:none;padding:12px 16px;border:1px solid rgba(78,158,255,.1);border-radius:12px;background:#0d1220;cursor:pointer;text-align:center;transition:all .25s;display:flex;align-items:center;gap:8px}
 .phase-tab.on{background:rgba(78,158,255,.1);border-color:rgba(78,158,255,.3)}
-.phase-tab-icon{font-size:18px;display:block;margin-bottom:4px}
-.phase-tab-name{font-size:10px;font-weight:600;color:#7a8ba8;text-transform:uppercase;letter-spacing:.3px;display:block}
+.phase-tab-icon{font-size:18px;flex-shrink:0}
+.phase-tab-text{display:flex;flex-direction:column;align-items:flex-start;gap:1px}
+.phase-tab-name{font-size:12px;font-weight:600;color:#7a8ba8;white-space:nowrap}
 .phase-tab.on .phase-tab-name{color:#e8edf5}
-.phase-tab-turb{font-size:9px;color:#4a5873;margin-top:2px;display:block}
+.phase-tab-turb{font-size:10px;white-space:nowrap}
 .phase-content{display:none}
 .phase-content.on{display:block}
 
 /* Live tracker */
-.tracker-bar{background:#131829;border:1px solid rgba(78,158,255,.1);border-radius:12px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px}
-.tracker-btn{padding:10px 16px;border-radius:8px;border:none;font-family:-apple-system,sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
+.tracker-bar{background:linear-gradient(135deg,rgba(52,211,153,.08),rgba(78,158,255,.08));border:1px solid rgba(52,211,153,.2);border-radius:12px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px}
+.tracker-bar.active{border-color:rgba(78,158,255,.3);background:linear-gradient(135deg,rgba(78,158,255,.08),rgba(124,58,237,.08))}
+.tracker-btn{padding:10px 18px;border-radius:8px;border:none;font-family:-apple-system,sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
 .tracker-btn-start{background:linear-gradient(135deg,#34d399,#059669);color:#fff}
 .tracker-btn-start:active{transform:scale(.95)}
-.tracker-btn-stop{background:rgba(251,113,133,.15);color:#fb7185;border:1px solid rgba(251,113,133,.2)}
-.tracker-time{font-family:'SF Mono',Menlo,monospace;font-size:20px;font-weight:700;color:#4e9eff;flex:1;text-align:center}
-.tracker-phase{font-size:11px;color:#7a8ba8;text-align:right}
+.tracker-info{flex:1;display:flex;align-items:center;justify-content:space-between}
+.tracker-time{font-family:'SF Mono',Menlo,monospace;font-size:22px;font-weight:700;color:#4e9eff}
+.tracker-phase{font-size:12px;color:#7a8ba8;text-align:right;line-height:1.4}
 .tl-item.tl-active{background:rgba(78,158,255,.06);border-radius:10px;margin:-4px -8px;padding:4px 8px 20px 8px}
 .tl-item.tl-active .tl-dot{box-shadow:0 0 8px #4e9eff;animation:pulse 2s infinite}
 .tl-item.tl-past{opacity:.5}
@@ -1235,18 +1237,22 @@ function renderBriefing(b) {
   // Live tracker bar
   h += '<div class="tracker-bar" id="trackerBar">';
   h += '<button class="tracker-btn tracker-btn-start" id="trackerBtn" onclick="toggleTracker()">▶ Mi avión ha despegado</button>';
-  h += '<div class="tracker-time" id="trackerTime" style="display:none">00:00</div>';
-  h += '<div class="tracker-phase" id="trackerPhase" style="display:none"></div>';
+  h += '<div class="tracker-info" id="trackerInfo" style="display:none">';
+  h += '<div class="tracker-time" id="trackerTime">0 min</div>';
+  h += '<div class="tracker-phase" id="trackerPhase"></div>';
+  h += '</div>';
   h += '</div>';
 
-  // Phase tabs
+  // Phase tabs — horizontal scroll pills
   h += '<div class="phase-tabs">';
   for (var pt = 0; pt < phaseRanges.length; pt++) {
     var isOn = pt === 0 ? ' on' : '';
     h += '<div class="phase-tab' + isOn + '" data-phase="' + pt + '" onclick="switchPhase(' + pt + ')">';
     h += '<span class="phase-tab-icon">' + phaseRanges[pt].icon + '</span>';
+    h += '<span class="phase-tab-text">';
     h += '<span class="phase-tab-name">' + phaseRanges[pt].name + '</span>';
-    if (pt > 0) h += '<span class="phase-tab-turb" style="color:' + turbColorsShort[phaseTurb[pt]] + '">' + turbLabelsShort[phaseTurb[pt]] + '</span>';
+    if (pt > 0) h += '<span class="phase-tab-turb" style="color:' + turbColorsShort[phaseTurb[pt]] + '">Turb: ' + turbLabelsShort[phaseTurb[pt]] + '</span>';
+    h += '</span>';
     h += '</div>';
   }
   h += '</div>';
@@ -1624,58 +1630,37 @@ var trackerClimb = 0;
 
 function toggleTracker() {
   var btn = document.getElementById('trackerBtn');
-  var timeEl = document.getElementById('trackerTime');
-  var phaseEl = document.getElementById('trackerPhase');
+  var infoEl = document.getElementById('trackerInfo');
+  var bar = document.getElementById('trackerBar');
 
   if (trackerInterval) {
-    // Stop tracker
-    clearInterval(trackerInterval);
-    trackerInterval = null;
-    trackerStart = null;
-    btn.className = 'tracker-btn tracker-btn-start';
-    btn.textContent = '▶ Mi avión ha despegado';
-    timeEl.style.display = 'none';
-    phaseEl.style.display = 'none';
-    // Remove active highlights
-    var items = document.querySelectorAll('.tl-item');
-    for (var i = 0; i < items.length; i++) {
-      items[i].classList.remove('tl-active', 'tl-past');
-    }
+    // Already running — ignore (no stop)
     return;
   }
 
   // Start tracker
   trackerStart = Date.now();
-  btn.className = 'tracker-btn tracker-btn-stop';
-  btn.textContent = '■ Parar';
-  timeEl.style.display = 'block';
-  phaseEl.style.display = 'block';
+  btn.style.display = 'none';
+  infoEl.style.display = 'flex';
+  bar.classList.add('active');
 
-  // Get flight duration from briefing data
-  var durBox = document.querySelector('.dur-val');
   trackerDur = lastBriefing ? lastBriefing.dur : 120;
   trackerClimb = lastBriefing ? lastBriefing.climbMin : 20;
 
   updateTracker();
-  trackerInterval = setInterval(updateTracker, 1000);
+  // Update every 30 seconds (minute granularity)
+  trackerInterval = setInterval(updateTracker, 30000);
 }
 
 function updateTracker() {
   if (!trackerStart) return;
   var elapsed = (Date.now() - trackerStart) / 60000; // minutes
-  var mins = Math.floor(elapsed);
-  var secs = Math.floor((elapsed - mins) * 60);
+  var mins = Math.round(elapsed);
   var timeEl = document.getElementById('trackerTime');
   var phaseEl = document.getElementById('trackerPhase');
 
-  // Display time
-  var hh = Math.floor(mins / 60);
-  var mm = mins % 60;
-  if (hh > 0) {
-    timeEl.textContent = hh + ':' + ('0'+mm).slice(-2) + ':' + ('0'+secs).slice(-2);
-  } else {
-    timeEl.textContent = mm + ':' + ('0'+secs).slice(-2);
-  }
+  // Display time in same format as timeline
+  timeEl.textContent = fmtMin(mins);
 
   // Determine phase
   var descentStart = trackerDur - 22;
@@ -1684,15 +1669,14 @@ function updateTracker() {
   if (mins < trackerClimb) { phaseName = 'Ascenso'; phaseIdx = 1; }
   else if (mins < descentStart) { phaseName = 'Crucero'; phaseIdx = 2; }
   else if (mins < trackerDur) { phaseName = 'Descenso'; phaseIdx = 3; }
-  else { phaseName = '¡Aterrizaje!'; phaseIdx = 3; }
+  else { phaseName = '¡Aterrizado!'; phaseIdx = 3; }
 
-  var remaining = Math.max(0, Math.round(trackerDur - elapsed));
-  phaseEl.innerHTML = phaseName + '<br><span style="font-size:10px;color:#4e9eff">' + (remaining > 0 ? 'Faltan ~' + fmtMin(remaining) : '¡Has llegado!') + '</span>';
+  phaseEl.innerHTML = phaseName;
 
   // Auto-switch to current phase tab
   switchPhase(phaseIdx);
 
-  // Highlight current event in active phase
+  // Highlight current event in active phase (no scroll forcing)
   highlightCurrentEvent(elapsed);
 }
 
@@ -1704,7 +1688,6 @@ function highlightCurrentEvent(elapsedMin) {
 
   for (var i = 0; i < items.length; i++) {
     items[i].classList.remove('tl-active', 'tl-past');
-    // Extract time from the tl-time element
     var timeSpan = items[i].querySelector('.tl-time');
     if (!timeSpan) continue;
     var timeText = timeSpan.textContent || timeSpan.innerText;
@@ -1717,11 +1700,6 @@ function highlightCurrentEvent(elapsedMin) {
   for (var j = 0; j < items.length; j++) {
     if (j < lastActive) items[j].classList.add('tl-past');
     else if (j === lastActive) items[j].classList.add('tl-active');
-  }
-
-  // Scroll active item into view
-  if (lastActive >= 0 && items[lastActive]) {
-    items[lastActive].scrollIntoView({behavior:'smooth', block:'center'});
   }
 }
 
