@@ -150,6 +150,30 @@ body{
 .fi{animation:fadeUp .5s ease both}
 @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
 
+/* Phase tabs for timeline */
+.phase-tabs{display:flex;gap:4px;margin-bottom:16px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.phase-tabs::-webkit-scrollbar{display:none}
+.phase-tab{flex:1;min-width:0;padding:10px 6px;border:1px solid rgba(78,158,255,.1);border-radius:10px;background:#0d1220;cursor:pointer;text-align:center;transition:all .25s;white-space:nowrap}
+.phase-tab.on{background:rgba(78,158,255,.1);border-color:rgba(78,158,255,.3)}
+.phase-tab-icon{font-size:18px;display:block;margin-bottom:4px}
+.phase-tab-name{font-size:10px;font-weight:600;color:#7a8ba8;text-transform:uppercase;letter-spacing:.3px;display:block}
+.phase-tab.on .phase-tab-name{color:#e8edf5}
+.phase-tab-turb{font-size:9px;color:#4a5873;margin-top:2px;display:block}
+.phase-content{display:none}
+.phase-content.on{display:block}
+
+/* Live tracker */
+.tracker-bar{background:#131829;border:1px solid rgba(78,158,255,.1);border-radius:12px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px}
+.tracker-btn{padding:10px 16px;border-radius:8px;border:none;font-family:-apple-system,sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
+.tracker-btn-start{background:linear-gradient(135deg,#34d399,#059669);color:#fff}
+.tracker-btn-start:active{transform:scale(.95)}
+.tracker-btn-stop{background:rgba(251,113,133,.15);color:#fb7185;border:1px solid rgba(251,113,133,.2)}
+.tracker-time{font-family:'SF Mono',Menlo,monospace;font-size:20px;font-weight:700;color:#4e9eff;flex:1;text-align:center}
+.tracker-phase{font-size:11px;color:#7a8ba8;text-align:right}
+.tl-item.tl-active{background:rgba(78,158,255,.06);border-radius:10px;margin:-4px -8px;padding:4px 8px 20px 8px}
+.tl-item.tl-active .tl-dot{box-shadow:0 0 8px #4e9eff;animation:pulse 2s infinite}
+.tl-item.tl-past{opacity:.5}
+
 .spacer{height:40px}
 </style>
 </head>
@@ -808,6 +832,19 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
       var zReason = zReasonStr.length > 0 ? zReasonStr.join(' y ') : 'condiciones atmosféricas';
       var zDur = zone.endMin - zone.startMin;
 
+      // Very short or single-point zone: one combined event, reassuring tone
+      if (zDur <= 3) {
+        var briefDesc = 'Posibilidad de turbulencia ' + turbLabelsLC2[zone.maxLevel] + ' muy breve por ' + zReason + '. Es probable que ni la notes.';
+        if (zone.maxLevel >= 3) briefDesc = 'Posibilidad de turbulencia ' + turbLabelsLC2[zone.maxLevel] + ' breve por ' + zReason + '. Mantén el cinturón abrochado.';
+        tl.push({min: zone.startMin, icon:'💨', c:'wrn', type:'flight', title:'Turbulencia puntual' + (turbZones.length > 1 ? ' (' + (tz+1) + '/' + turbZones.length + ')' : ''), desc: briefDesc});
+
+        // Safety reminder for first zone only
+        if (tz === 0) {
+          tl.push({min: zone.startMin + 1, icon:'🛡️', c:'ev', type:'always', title:'Sobre la turbulencia', desc:'Las turbulencias son incómodas pero no suponen ningún peligro para el avión. Los pilotos están entrenados para esto y, si pueden, adaptarán la ruta o la altitud para reducir las molestias.'});
+        }
+        continue;
+      }
+
       // Entry
       var entryDesc = 'Entramos en una zona con turbulencia ' + turbLabelsLC2[zone.maxLevel] + ' prevista, debido a ' + zReason + '.';
       if (zone.maxLevel >= 3) entryDesc += ' Mantén el cinturón abrochado.';
@@ -1048,7 +1085,7 @@ function renderBriefing(b) {
     for (var zd = 0; zd < tp.zones.length; zd++) {
       var z = tp.zones[zd];
       var zSpan2 = z.endMin - z.startMin;
-      if (z.startMin === z.endMin) zoneStrs.push('~' + fmtMin(z.startMin));
+      if (zSpan2 <= 3) zoneStrs.push('~' + fmtMin(z.startMin) + ' (breve)');
       else if (tp.zones.length === 1 && zSpan2 > cruiseDur2 * 0.7) zoneStrs.push('mayor parte');
       else zoneStrs.push(fmtMin(z.startMin) + ' a ' + fmtMin(z.endMin));
     }
@@ -1086,8 +1123,9 @@ function renderBriefing(b) {
       var zSpan = z1.endMin - z1.startMin;
       var cruiseDur = b.dur - b.climbMin - 22;
       var zTimeStr;
-      if (z1.startMin === z1.endMin) {
-        zTimeStr = 'Sobre ' + fmtMin(z1.startMin) + ' de vuelo';
+      if (zSpan <= 3) {
+        zTimeStr = 'Sobre ' + fmtMin(z1.startMin) + ' de vuelo, hay posibilidad de turbulencia ' + turbLabelsLC[tp.cruise] + ' muy breve' + cruiseWhyStr + '. Es probable que apenas se note';
+        phases.push(zTimeStr + '. ' + (inCloudCruise ? 'Estarás dentro de nubes en parte de este tramo' : 'No estarás dentro de nubes'));
       } else if (zSpan > cruiseDur * 0.7) {
         zTimeStr = 'Durante la mayor parte del crucero (' + fmtMin(z1.startMin) + ' a ' + fmtMin(z1.endMin) + ')';
       } else {
@@ -1098,7 +1136,13 @@ function renderBriefing(b) {
       var zDescs = [];
       for (var zn = 0; zn < tp.zones.length; zn++) {
         var zz = tp.zones[zn];
-        var zzTime = zz.startMin === zz.endMin ? '~' + fmtMin(zz.startMin) : fmtMin(zz.startMin) + ' a ' + fmtMin(zz.endMin);
+        var zzSpan = zz.endMin - zz.startMin;
+        var zzTime;
+        if (zzSpan <= 3) {
+          zzTime = '~' + fmtMin(zz.startMin) + ', muy breve';
+        } else {
+          zzTime = fmtMin(zz.startMin) + ' a ' + fmtMin(zz.endMin);
+        }
         zDescs.push(zzTime + ' (' + turbLabelsLC[zz.maxLevel] + ')');
       }
       phases.push('Se prevén ' + tp.zones.length + ' zonas de turbulencia en crucero' + cruiseWhyStr + ': ' + zDescs.join(', ') + '. ' + (inCloudCruise ? 'Estarás dentro de nubes en parte del recorrido' : 'No estarás dentro de nubes'));
@@ -1154,10 +1198,71 @@ function renderBriefing(b) {
   h += '</div>';
   h += '</div>';
 
-  // Unified Flight timeline
-  h += '<div class="card fi"><div class="card-title">🕐 Timeline completo</div>';
-  h += '<div style="margin-bottom:12px;font-size:12px;color:#7a8ba8">Los eventos <span style="color:#4e9eff">en azul</span> son específicos de tu vuelo. Los eventos <span style="color:#94a3b8">en gris</span> ocurren en todos los vuelos.</div>';
-  h += renderTL(b.tl, b.dur) + '</div>';
+  // Unified Flight timeline — split into phases
+  var phaseRanges = [
+    {id:'ph-board', icon:'🚶', name:'Embarque', minFrom:-20, minTo:0},
+    {id:'ph-climb', icon:'🛫', name:'Despegue y ascenso', minFrom:0, minTo:b.climbMin},
+    {id:'ph-cruise', icon:'✈️', name:'Crucero', minFrom:b.climbMin, minTo:b.dur-22},
+    {id:'ph-desc', icon:'🛬', name:'Descenso y llegada', minFrom:b.dur-22, minTo:b.dur+10}
+  ];
+
+  // Sort items into phases
+  var phaseItems = [[],[],[],[]];
+  for (var pi = 0; pi < b.tl.length; pi++) {
+    var ev = b.tl[pi];
+    // Assign to best-matching phase
+    if (ev.min < 0) { phaseItems[0].push(ev); }
+    else if (ev.min < b.climbMin) { phaseItems[1].push(ev); }
+    else if (ev.min < b.dur - 22) { phaseItems[2].push(ev); }
+    else { phaseItems[3].push(ev); }
+  }
+  // Takeoff event (min 0) goes to climb phase
+  for (var m0 = phaseItems[0].length - 1; m0 >= 0; m0--) {
+    if (phaseItems[0][m0].min === 0) {
+      phaseItems[1].unshift(phaseItems[0].splice(m0, 1)[0]);
+    }
+  }
+
+  // Turbulence label per phase
+  var turbLabelsShort = ['—', 'Baja', 'Baja/Med', 'Media', 'Fuerte'];
+  var turbColorsShort = ['#34d399', '#7a8ba8', '#94a3b8', '#fbbf24', '#f87171'];
+  var phaseTurb = [0, tp.climb, tp.cruise, tp.descent];
+
+  // Live tracker button + phase tabs
+  h += '<div class="card fi" id="timelineCard">';
+  h += '<div class="card-title">🕐 Timeline de tu vuelo</div>';
+
+  // Live tracker bar
+  h += '<div class="tracker-bar" id="trackerBar">';
+  h += '<button class="tracker-btn tracker-btn-start" id="trackerBtn" onclick="toggleTracker()">▶ Mi avión ha despegado</button>';
+  h += '<div class="tracker-time" id="trackerTime" style="display:none">00:00</div>';
+  h += '<div class="tracker-phase" id="trackerPhase" style="display:none"></div>';
+  h += '</div>';
+
+  // Phase tabs
+  h += '<div class="phase-tabs">';
+  for (var pt = 0; pt < phaseRanges.length; pt++) {
+    var isOn = pt === 0 ? ' on' : '';
+    h += '<div class="phase-tab' + isOn + '" data-phase="' + pt + '" onclick="switchPhase(' + pt + ')">';
+    h += '<span class="phase-tab-icon">' + phaseRanges[pt].icon + '</span>';
+    h += '<span class="phase-tab-name">' + phaseRanges[pt].name + '</span>';
+    if (pt > 0) h += '<span class="phase-tab-turb" style="color:' + turbColorsShort[phaseTurb[pt]] + '">' + turbLabelsShort[phaseTurb[pt]] + '</span>';
+    h += '</div>';
+  }
+  h += '</div>';
+
+  // Phase contents
+  for (var pc = 0; pc < phaseRanges.length; pc++) {
+    var pcOn = pc === 0 ? ' on' : '';
+    h += '<div class="phase-content' + pcOn + '" id="phase-' + pc + '">';
+    if (phaseItems[pc].length > 0) {
+      h += renderTL(phaseItems[pc], b.dur);
+    } else {
+      h += '<div style="text-align:center;padding:20px;color:#4a5873;font-size:14px">Sin eventos específicos en esta fase</div>';
+    }
+    h += '</div>';
+  }
+  h += '</div>';
 
   // Conditions
   h += '<div class="card fi"><div class="card-title">🌡️ Condiciones</div>';
@@ -1377,6 +1482,12 @@ function showScr(show, hide, dir) {
 }
 
 function goBack() {
+  // Stop live tracker if running
+  if (trackerInterval) {
+    clearInterval(trackerInterval);
+    trackerInterval = null;
+    trackerStart = null;
+  }
   var steps = ['st1','st2','st3','st4','st5'];
   for (var i = 0; i < steps.length; i++) {
     document.getElementById(steps[i]).className = 'step';
@@ -1400,6 +1511,11 @@ async function analyze() {
     return;
   }
 
+  // Show loading screen IMMEDIATELY
+  showScr('S2', 'S1', 'f');
+  var steps = ['st1','st2','st3','st4','st5'];
+  document.getElementById(steps[0]).className = 'step on';
+
   var fl = FLIGHTS[code];
   if (!fl) {
     try {
@@ -1410,7 +1526,6 @@ async function analyze() {
         if (!apiData.error && apiData.departure && apiData.arrival) {
           var cruiseFl = 360;
           var durGate = apiData.durationMin || 120;
-          // API gives gate-to-gate duration; adjust to flight time (wheels-up to wheels-down)
           var taxiDep = (AP[apiData.departure.iata] && AP[apiData.departure.iata].taxi) || 12;
           var taxiArr = (AP[apiData.arrival.iata] && AP[apiData.arrival.iata].taxi) || 8;
           var dur = Math.max(30, durGate - taxiDep - taxiArr);
@@ -1430,6 +1545,7 @@ async function analyze() {
     } catch(e) { console.log('API error:', e); }
   }
   if (!fl) {
+    showScr('S1', 'S2', 'b');
     var inp = document.getElementById('inFlight');
     inp.style.borderColor = '#f87171';
     inp.value = '';
@@ -1443,6 +1559,7 @@ async function analyze() {
   var tAP = AP[fl.to];
 
   if (!fAP || !tAP) {
+    showScr('S1', 'S2', 'b');
     var inp = document.getElementById('inFlight');
     inp.style.borderColor = '#f87171';
     inp.value = '';
@@ -1451,12 +1568,7 @@ async function analyze() {
     return;
   }
 
-  showScr('S2', 'S1', 'f');
-
-  var steps = ['st1','st2','st3','st4','st5'];
-  // Step 1: flight found
-  document.getElementById(steps[0]).className = 'step on';
-  await delay(400);
+  // Step 1 done: flight found
   document.getElementById(steps[0]).className = 'step ok';
 
   // Step 2 & 3: weather data (prefer server-side, fallback to client)
@@ -1485,9 +1597,148 @@ async function analyze() {
   await delay(200);
 
   var briefing = makeBriefing(fl, fAP, tAP, seat, acCode, weatherData);
+  lastBriefing = briefing;
   renderBriefing(briefing);
   showScr('S3', 'S2', 'f');
 }
+
+// ============================================================
+// PHASE TABS
+// ============================================================
+function switchPhase(idx) {
+  var tabs = document.querySelectorAll('.phase-tab');
+  var contents = document.querySelectorAll('.phase-content');
+  for (var i = 0; i < tabs.length; i++) {
+    tabs[i].className = 'phase-tab' + (i === idx ? ' on' : '');
+    contents[i].className = 'phase-content' + (i === idx ? ' on' : '');
+  }
+}
+
+// ============================================================
+// LIVE FLIGHT TRACKER
+// ============================================================
+var trackerInterval = null;
+var trackerStart = null;
+var trackerDur = 0;
+var trackerClimb = 0;
+
+function toggleTracker() {
+  var btn = document.getElementById('trackerBtn');
+  var timeEl = document.getElementById('trackerTime');
+  var phaseEl = document.getElementById('trackerPhase');
+
+  if (trackerInterval) {
+    // Stop tracker
+    clearInterval(trackerInterval);
+    trackerInterval = null;
+    trackerStart = null;
+    btn.className = 'tracker-btn tracker-btn-start';
+    btn.textContent = '▶ Mi avión ha despegado';
+    timeEl.style.display = 'none';
+    phaseEl.style.display = 'none';
+    // Remove active highlights
+    var items = document.querySelectorAll('.tl-item');
+    for (var i = 0; i < items.length; i++) {
+      items[i].classList.remove('tl-active', 'tl-past');
+    }
+    return;
+  }
+
+  // Start tracker
+  trackerStart = Date.now();
+  btn.className = 'tracker-btn tracker-btn-stop';
+  btn.textContent = '■ Parar';
+  timeEl.style.display = 'block';
+  phaseEl.style.display = 'block';
+
+  // Get flight duration from briefing data
+  var durBox = document.querySelector('.dur-val');
+  trackerDur = lastBriefing ? lastBriefing.dur : 120;
+  trackerClimb = lastBriefing ? lastBriefing.climbMin : 20;
+
+  updateTracker();
+  trackerInterval = setInterval(updateTracker, 1000);
+}
+
+function updateTracker() {
+  if (!trackerStart) return;
+  var elapsed = (Date.now() - trackerStart) / 60000; // minutes
+  var mins = Math.floor(elapsed);
+  var secs = Math.floor((elapsed - mins) * 60);
+  var timeEl = document.getElementById('trackerTime');
+  var phaseEl = document.getElementById('trackerPhase');
+
+  // Display time
+  var hh = Math.floor(mins / 60);
+  var mm = mins % 60;
+  if (hh > 0) {
+    timeEl.textContent = hh + ':' + ('0'+mm).slice(-2) + ':' + ('0'+secs).slice(-2);
+  } else {
+    timeEl.textContent = mm + ':' + ('0'+secs).slice(-2);
+  }
+
+  // Determine phase
+  var descentStart = trackerDur - 22;
+  var phaseName = '';
+  var phaseIdx = 0;
+  if (mins < trackerClimb) { phaseName = 'Ascenso'; phaseIdx = 1; }
+  else if (mins < descentStart) { phaseName = 'Crucero'; phaseIdx = 2; }
+  else if (mins < trackerDur) { phaseName = 'Descenso'; phaseIdx = 3; }
+  else { phaseName = '¡Aterrizaje!'; phaseIdx = 3; }
+
+  var remaining = Math.max(0, Math.round(trackerDur - elapsed));
+  phaseEl.innerHTML = phaseName + '<br><span style="font-size:10px;color:#4e9eff">' + (remaining > 0 ? 'Faltan ~' + fmtMin(remaining) : '¡Has llegado!') + '</span>';
+
+  // Auto-switch to current phase tab
+  switchPhase(phaseIdx);
+
+  // Highlight current event in active phase
+  highlightCurrentEvent(elapsed);
+}
+
+function highlightCurrentEvent(elapsedMin) {
+  var activePane = document.querySelector('.phase-content.on');
+  if (!activePane) return;
+  var items = activePane.querySelectorAll('.tl-item');
+  var lastActive = -1;
+
+  for (var i = 0; i < items.length; i++) {
+    items[i].classList.remove('tl-active', 'tl-past');
+    // Extract time from the tl-time element
+    var timeSpan = items[i].querySelector('.tl-time');
+    if (!timeSpan) continue;
+    var timeText = timeSpan.textContent || timeSpan.innerText;
+    var evMin = parseTimeLabel(timeText);
+    if (evMin !== null && evMin <= elapsedMin) {
+      lastActive = i;
+    }
+  }
+
+  for (var j = 0; j < items.length; j++) {
+    if (j < lastActive) items[j].classList.add('tl-past');
+    else if (j === lastActive) items[j].classList.add('tl-active');
+  }
+
+  // Scroll active item into view
+  if (lastActive >= 0 && items[lastActive]) {
+    items[lastActive].scrollIntoView({behavior:'smooth', block:'center'});
+  }
+}
+
+function parseTimeLabel(text) {
+  // Parse "45 min", "1h 30min", "1h", "Despegue" etc
+  text = text.trim().split('\n')[0]; // ignore second line (-X' aterr.)
+  if (text === 'Despegue') return 0;
+  if (text.indexOf("' antes") > -1) return -parseInt(text);
+  var hMatch = text.match(/(\d+)h/);
+  var mMatch = text.match(/(\d+)\s*min/);
+  var h = hMatch ? parseInt(hMatch[1]) : 0;
+  var m = mMatch ? parseInt(mMatch[1]) : 0;
+  if (hMatch || mMatch) return h * 60 + m;
+  return null;
+}
+
+var lastBriefing = null;
 
 // ============================================================
 // INIT
