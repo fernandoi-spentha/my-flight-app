@@ -249,12 +249,12 @@ var AC = {
 };
 
 var FLIGHTS = {
-  IB651:{al:"Iberia",from:"MAD",to:"FCO",dur:155,ac:"A321",fl:360},
-  VY1001:{al:"Vueling",from:"BCN",to:"MAD",dur:75,ac:"A320",fl:340},
-  BA456:{al:"British Airways",from:"LHR",to:"MAD",dur:145,ac:"A320",fl:370},
-  FR5994:{al:"Ryanair",from:"STN",to:"MAD",dur:150,ac:"B738",fl:360},
-  IB3100:{al:"Iberia",from:"MAD",to:"LHR",dur:155,ac:"A321",fl:380},
-  TP1024:{al:"TAP",from:"LIS",to:"MAD",dur:75,ac:"A320neo",fl:320},
+  IB651:{al:"Iberia",from:"MAD",to:"FCO",dur:125,ac:"A321",fl:360},
+  VY1001:{al:"Vueling",from:"BCN",to:"MAD",dur:60,ac:"A320",fl:340},
+  BA456:{al:"British Airways",from:"LHR",to:"MAD",dur:125,ac:"A320",fl:370},
+  FR5994:{al:"Ryanair",from:"STN",to:"MAD",dur:130,ac:"B738",fl:360},
+  IB3100:{al:"Iberia",from:"MAD",to:"LHR",dur:130,ac:"A321",fl:380},
+  TP1024:{al:"TAP",from:"LIS",to:"MAD",dur:60,ac:"A320neo",fl:320},
 };
 
 // ============================================================
@@ -583,7 +583,7 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
   for (var rp = 0; rp < routeClouds.length; rp++) {
     var rc = routeClouds[rp];
     var rpMin = Math.round(rc.frac * dur);
-    if (rpMin < 2 || rpMin > dur - 2) continue;
+    if (rpMin < climbMin || rpMin > dur - 22) continue;
     var planeAlt = altAtMin(rpMin);
     var ptLevel = 0;
     var ptReasons = [];
@@ -1405,7 +1405,11 @@ async function analyze() {
         var apiData = await apiR.json();
         if (!apiData.error && apiData.departure && apiData.arrival) {
           var cruiseFl = 360;
-          var dur = apiData.durationMin || 120;
+          var durGate = apiData.durationMin || 120;
+          // API gives gate-to-gate duration; adjust to flight time (wheels-up to wheels-down)
+          var taxiDep = (AP[apiData.departure.iata] && AP[apiData.departure.iata].taxi) || 12;
+          var taxiArr = (AP[apiData.arrival.iata] && AP[apiData.arrival.iata].taxi) || 8;
+          var dur = Math.max(30, durGate - taxiDep - taxiArr);
           if (dur < 60) cruiseFl = 280;
           else if (dur < 90) cruiseFl = 320;
           else if (dur < 150) cruiseFl = 360;
