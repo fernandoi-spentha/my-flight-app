@@ -728,7 +728,21 @@ function makeBriefing(fl, fAP, tAP, seat, acCode, weatherData) {
   if (dW.temp > 30 && dW.cape > 300) { turbDescent = Math.max(turbDescent, 1); if (turbReasons.descent.indexOf('convección térmica') < 0) turbReasons.descent.push('convección térmica'); }
 
   var turbMax = Math.max(turbClimb, turbCruise, turbDescent);
-  var turbPhases = {climb: turbClimb, cruise: turbCruise, descent: turbDescent, max: turbMax, cruiseMinStart: turbCruiseMinStart, cruiseMinEnd: turbCruiseMinEnd, zones: turbZones, points: turbPoints, reasons: turbReasons};
+
+  // Add climb + descent points so the turbulence map chart has data for ALL phases
+  var allTurbPoints = [];
+  // Climb phase: from min 0 to climbMin, level = turbClimb
+  allTurbPoints.push({min: 0, level: turbClimb, reasons: turbReasons.climb});
+  allTurbPoints.push({min: Math.max(1, climbMin - 1), level: turbClimb, reasons: turbReasons.climb});
+  // Cruise points (already computed)
+  for (var atp = 0; atp < turbPoints.length; atp++) {
+    allTurbPoints.push(turbPoints[atp]);
+  }
+  // Descent phase: from dur-22 to dur, level = turbDescent
+  allTurbPoints.push({min: dur - 22, level: turbDescent, reasons: turbReasons.descent});
+  allTurbPoints.push({min: dur, level: turbDescent, reasons: turbReasons.descent});
+
+  var turbPhases = {climb: turbClimb, cruise: turbCruise, descent: turbDescent, max: turbMax, cruiseMinStart: turbCruiseMinStart, cruiseMinEnd: turbCruiseMinEnd, zones: turbZones, points: allTurbPoints, reasons: turbReasons};
 
   // Destination cloud layers for descent
   var dcEvents = [];
@@ -1080,6 +1094,35 @@ function renderBriefing(b) {
   var turbColors = ['#4e9eff', '#7a8ba8', '#94a3b8', '#64748b', '#475569'];
   var turbWidths = ['8%', '25%', '45%', '65%', '85%'];
 
+  // ============================================================
+  // FREE CONTENT
+  // ============================================================
+
+  // Safety banner
+  h += '<div class="safety fi"><span style="font-size:20px">🛡️</span><div class="safety-text">La aviación comercial es el medio de transporte más seguro del mundo. Todo lo que lees aquí forma parte del funcionamiento normal de <strong>todos</strong> los vuelos.</div></div>';
+
+  // Narrative briefing — FREE
+  h += '<div class="card fi"><div class="card-title">✅ Tu briefing</div><div class="narr">' + b.narr + '</div></div>';
+
+  // === TURBULENCE MAP — route line colored by turbulence level — FREE ===
+  h += '<div class="card fi"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between">Mapa de turbulencia<span style="background:#1a3a2a;color:#34d399;font-size:10px;padding:3px 10px;border-radius:12px;font-weight:600">● En ruta</span></div>';
+  h += '<div style="position:relative;background:#0d1b2a;border-radius:12px;padding:16px 12px 10px;overflow:hidden">';
+  h += '<canvas id="turbMap" width="800" height="260" style="width:100%;height:130px;display:block"></canvas>';
+  h += '</div>';
+  h += '<div style="margin-top:8px;display:flex;gap:14px;justify-content:center;font-size:11px;color:#7a8ba8">';
+  h += '<span><span style="display:inline-block;width:20px;height:4px;border-radius:2px;background:#34d399;vertical-align:middle;margin-right:5px"></span>Sin turbulencia</span>';
+  h += '<span><span style="display:inline-block;width:20px;height:4px;border-radius:2px;background:#fbbf24;vertical-align:middle;margin-right:5px"></span>Leve</span>';
+  h += '<span><span style="display:inline-block;width:20px;height:4px;border-radius:2px;background:#f97316;vertical-align:middle;margin-right:5px"></span>Moderada</span>';
+  h += '</div>';
+  h += '</div>';
+
+  // ============================================================
+  // PREMIUM CONTENT — single blurred block
+  // ============================================================
+  h += '<div class="premium-card" style="position:relative;overflow:hidden">';
+  h += '<div style="filter:blur(5px);-webkit-filter:blur(5px);pointer-events:none">';
+
+  // Turbulence estimated card
   h += '<div class="card fi">';
   h += '<div class="card-title">✈️ Turbulencia estimada</div>';
   h += '<div class="turb-bar"><div class="turb-fill" style="width:' + turbWidths[tp.max] + ';background:' + turbColors[tp.max] + '"></div></div>';
@@ -1178,30 +1221,9 @@ function renderBriefing(b) {
   h += '<div style="margin-top:10px;font-size:12px;color:#94a3b8;line-height:1.7">' + turbNarr + '</div>';
   h += '</div>';
 
-  // Safety banner
-  h += '<div class="safety fi"><span style="font-size:20px">🛡️</span><div class="safety-text">La aviación comercial es el medio de transporte más seguro del mundo. Todo lo que lees aquí forma parte del funcionamiento normal de <strong>todos</strong> los vuelos.</div></div>';
-
-  // Narrative
-  h += '<div class="card fi"><div class="card-title">✅ Tu briefing</div><div class="narr">' + b.narr + '</div></div>';
-
-  // === TURBULENCE MAP — route line colored by turbulence level ===
-  h += '<div class="card fi"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between">Mapa de turbulencia<span style="background:#1a3a2a;color:#34d399;font-size:10px;padding:3px 10px;border-radius:12px;font-weight:600">● En ruta</span></div>';
-  h += '<div style="position:relative;background:#0d1b2a;border-radius:12px;padding:16px 12px 10px;overflow:hidden">';
-  h += '<canvas id="turbMap" width="800" height="260" style="width:100%;height:130px;display:block"></canvas>';
-  h += '</div>';
-  h += '<div style="margin-top:8px;display:flex;gap:14px;justify-content:center;font-size:11px;color:#7a8ba8">';
-  h += '<span><span style="display:inline-block;width:20px;height:4px;border-radius:2px;background:#34d399;vertical-align:middle;margin-right:5px"></span>Sin turbulencia</span>';
-  h += '<span><span style="display:inline-block;width:20px;height:4px;border-radius:2px;background:#fbbf24;vertical-align:middle;margin-right:5px"></span>Leve</span>';
-  h += '<span><span style="display:inline-block;width:20px;height:4px;border-radius:2px;background:#f97316;vertical-align:middle;margin-right:5px"></span>Moderada</span>';
-  h += '</div>';
-  h += '</div>';
-
-  // Cloud cross-section chart — PREMIUM (blurred with overlay)
-  h += '<div class="card fi premium-card" style="position:relative;overflow:hidden">';
-  h += '<div class="card-title" style="display:flex;align-items:center;justify-content:space-between">☁️ Perfil de vuelo y nubes<span style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:9px;padding:3px 8px;border-radius:10px;font-weight:700;letter-spacing:.5px">PRO</span></div>';
-  h += '<div style="position:relative">';
-  // The chart renders but is blurred
-  h += '<div id="cloudChartWrap" style="filter:blur(6px);-webkit-filter:blur(6px);pointer-events:none">';
+  // Cloud cross-section chart — inside premium blur block
+  h += '<div class="card fi">';
+  h += '<div class="card-title">☁️ Perfil de vuelo y nubes</div>';
   h += '<div style="background:#0d1220;border-radius:10px;padding:12px;overflow:hidden">';
   h += '<canvas id="cloudChart" width="760" height="340" style="width:100%;height:170px;display:block"></canvas>';
   h += '</div>';
@@ -1210,33 +1232,7 @@ function renderBriefing(b) {
   h += '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:rgba(56,189,248,.3);vertical-align:middle;margin-right:4px"></span>Turbulencia</span>';
   h += '<span><span style="display:inline-block;width:10px;height:2px;background:#4e9eff;vertical-align:middle;margin-right:4px"></span>Tu avión</span>';
   h += '</div>';
-  h += '<div style="margin-top:8px;display:flex;align-items:center;justify-content:center;gap:4px;font-size:10px;color:#4a5873">';
-  h += '<span>Cobertura:</span>';
-  h += '<span style="display:inline-block;width:16px;height:10px;border-radius:2px;background:rgba(167,139,250,.15)"></span><span>20%</span>';
-  h += '<span style="display:inline-block;width:16px;height:10px;border-radius:2px;background:rgba(167,139,250,.35)"></span><span>40%</span>';
-  h += '<span style="display:inline-block;width:16px;height:10px;border-radius:2px;background:rgba(167,139,250,.55)"></span><span>70%</span>';
-  h += '<span style="display:inline-block;width:16px;height:10px;border-radius:2px;background:rgba(167,139,250,.7)"></span><span>100%</span>';
   h += '</div>';
-  h += '<div style="margin-top:4px;display:flex;align-items:center;justify-content:center;gap:4px;font-size:10px;color:#4a5873">';
-  h += '<span>Turbulencia:</span>';
-  h += '<span style="display:inline-block;width:16px;height:10px;border-radius:2px;background:rgba(56,189,248,.12)"></span><span>Baja</span>';
-  h += '<span style="display:inline-block;width:16px;height:10px;border-radius:2px;background:rgba(56,189,248,.20)"></span><span>Baja/Media</span>';
-  h += '<span style="display:inline-block;width:16px;height:10px;border-radius:2px;background:rgba(56,189,248,.30)"></span><span>Media</span>';
-  h += '</div>';
-  h += '</div>'; // end blurred wrapper
-  // Premium overlay on top
-  h += '<div class="premium-overlay">';
-  h += '<div class="premium-lock">🔒</div>';
-  h += '<div class="premium-title">Perfil detallado de nubes y turbulencia</div>';
-  h += '<div class="premium-desc">Ve exactamente dónde hay nubes y turbulencia a cada altitud durante tu vuelo</div>';
-  h += '<button class="premium-btn" onclick="alert(\'Próximamente — versión Pro\\n\\nIncluye:\\n• Perfil detallado nubes + turbulencia\\n• Timeline minuto a minuto\\n• Tracker en vivo\\n• Explicación de cada ruido\')">Desbloquear Pro</button>';
-  h += '</div>';
-  h += '</div>'; // end position:relative
-  h += '</div>'; // end card
-
-  // === PREMIUM SECTION: Timeline + details ===
-  h += '<div class="premium-card" style="position:relative;overflow:hidden">';
-  h += '<div style="filter:blur(5px);-webkit-filter:blur(5px);pointer-events:none">';
 
   // Unified Flight timeline — split into phases
   var phaseRanges = [
@@ -1332,15 +1328,13 @@ function renderBriefing(b) {
   h += '<span class="he">🔔 Señales acústicas</span> — Comunicación entre pilotos y tripulación, o indicador de cinturones.';
   h += '</div></div>';
 
-  h += '</div></div>';
-
   h += '</div>'; // end blur wrapper
-  // Premium overlay for timeline section
+  // Premium overlay
   h += '<div class="premium-overlay premium-overlay-tall">';
   h += '<div class="premium-lock">🔒</div>';
-  h += '<div class="premium-title">Timeline completo de tu vuelo</div>';
-  h += '<div class="premium-desc">Cada fase explicada minuto a minuto, tracker en vivo, guía de sonidos y más</div>';
-  h += '<button class="premium-btn" onclick="alert(\'Próximamente — versión Pro\\n\\nIncluye:\\n• Timeline minuto a minuto (4 fases)\\n• Tracker en vivo durante el vuelo\\n• Guía de sonidos de tu avión\\n• Condiciones meteorológicas detalladas\\n• Vista desde tu ventanilla\')">Desbloquear Pro</button>';
+  h += '<div class="premium-title">Informe completo de tu vuelo</div>';
+  h += '<div class="premium-desc">Turbulencia por fases, perfil de nubes, timeline minuto a minuto, tracker en vivo, guía de sonidos y más</div>';
+  h += '<button class="premium-btn" onclick="alert(\'Próximamente — versión Pro\\n\\nIncluye:\\n• Análisis de turbulencia por fases\\n• Perfil de nubes y altitud\\n• Timeline minuto a minuto (4 fases)\\n• Tracker en vivo durante el vuelo\\n• Guía de sonidos de tu avión\\n• Condiciones meteorológicas\\n• Vista desde tu ventanilla\')">Desbloquear Pro</button>';
   h += '</div>';
   h += '</div>'; // end premium-card
 
