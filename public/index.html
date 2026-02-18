@@ -177,6 +177,15 @@ body{
 .tl-item.tl-past{opacity:.5}
 
 .spacer{height:40px}
+/* Premium overlay styles */
+.premium-card{position:relative;overflow:hidden;border-radius:16px}
+.premium-overlay{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,15,30,.65);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);z-index:10;padding:24px;text-align:center}
+.premium-overlay-tall{min-height:300px}
+.premium-lock{font-size:36px;margin-bottom:10px}
+.premium-title{font-size:16px;font-weight:700;color:#e8edf5;margin-bottom:6px}
+.premium-desc{font-size:13px;color:#7a8ba8;line-height:1.5;max-width:280px;margin-bottom:16px}
+.premium-btn{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;padding:12px 32px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.3px;transition:transform .2s,box-shadow .2s;box-shadow:0 4px 20px rgba(99,102,241,.3)}
+.premium-btn:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(99,102,241,.45)}
 </style>
 </head>
 <body>
@@ -1187,9 +1196,13 @@ function renderBriefing(b) {
   h += '</div>';
   h += '</div>';
 
-  // Cloud cross-section chart — canvas
-  h += '<div class="card fi"><div class="card-title">☁️ Perfil de vuelo y nubes</div>';
-  h += '<div style="position:relative;background:#0d1220;border-radius:10px;padding:12px;overflow:hidden">';
+  // Cloud cross-section chart — PREMIUM (blurred with overlay)
+  h += '<div class="card fi premium-card" style="position:relative;overflow:hidden">';
+  h += '<div class="card-title" style="display:flex;align-items:center;justify-content:space-between">☁️ Perfil de vuelo y nubes<span style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:9px;padding:3px 8px;border-radius:10px;font-weight:700;letter-spacing:.5px">PRO</span></div>';
+  h += '<div style="position:relative">';
+  // The chart renders but is blurred
+  h += '<div id="cloudChartWrap" style="filter:blur(6px);-webkit-filter:blur(6px);pointer-events:none">';
+  h += '<div style="background:#0d1220;border-radius:10px;padding:12px;overflow:hidden">';
   h += '<canvas id="cloudChart" width="760" height="340" style="width:100%;height:170px;display:block"></canvas>';
   h += '</div>';
   h += '<div style="margin-top:10px;display:flex;gap:16px;justify-content:center;font-size:11px;color:#7a8ba8">';
@@ -1210,7 +1223,20 @@ function renderBriefing(b) {
   h += '<span style="display:inline-block;width:16px;height:10px;border-radius:2px;background:rgba(56,189,248,.20)"></span><span>Baja/Media</span>';
   h += '<span style="display:inline-block;width:16px;height:10px;border-radius:2px;background:rgba(56,189,248,.30)"></span><span>Media</span>';
   h += '</div>';
+  h += '</div>'; // end blurred wrapper
+  // Premium overlay on top
+  h += '<div class="premium-overlay">';
+  h += '<div class="premium-lock">🔒</div>';
+  h += '<div class="premium-title">Perfil detallado de nubes y turbulencia</div>';
+  h += '<div class="premium-desc">Ve exactamente dónde hay nubes y turbulencia a cada altitud durante tu vuelo</div>';
+  h += '<button class="premium-btn" onclick="alert(\'Próximamente — versión Pro\\n\\nIncluye:\\n• Perfil detallado nubes + turbulencia\\n• Timeline minuto a minuto\\n• Tracker en vivo\\n• Explicación de cada ruido\')">Desbloquear Pro</button>';
   h += '</div>';
+  h += '</div>'; // end position:relative
+  h += '</div>'; // end card
+
+  // === PREMIUM SECTION: Timeline + details ===
+  h += '<div class="premium-card" style="position:relative;overflow:hidden">';
+  h += '<div style="filter:blur(5px);-webkit-filter:blur(5px);pointer-events:none">';
 
   // Unified Flight timeline — split into phases
   var phaseRanges = [
@@ -1305,6 +1331,18 @@ function renderBriefing(b) {
   h += '<span class="he">🔊 Cambios de potencia</span> — Los motores varían su intensidad durante el vuelo. Nunca se apagan.<br><br>';
   h += '<span class="he">🔔 Señales acústicas</span> — Comunicación entre pilotos y tripulación, o indicador de cinturones.';
   h += '</div></div>';
+
+  h += '</div></div>';
+
+  h += '</div>'; // end blur wrapper
+  // Premium overlay for timeline section
+  h += '<div class="premium-overlay premium-overlay-tall">';
+  h += '<div class="premium-lock">🔒</div>';
+  h += '<div class="premium-title">Timeline completo de tu vuelo</div>';
+  h += '<div class="premium-desc">Cada fase explicada minuto a minuto, tracker en vivo, guía de sonidos y más</div>';
+  h += '<button class="premium-btn" onclick="alert(\'Próximamente — versión Pro\\n\\nIncluye:\\n• Timeline minuto a minuto (4 fases)\\n• Tracker en vivo durante el vuelo\\n• Guía de sonidos de tu avión\\n• Condiciones meteorológicas detalladas\\n• Vista desde tu ventanilla\')">Desbloquear Pro</button>';
+  h += '</div>';
+  h += '</div>'; // end premium-card
 
   h += '<div class="spacer"></div>';
 
