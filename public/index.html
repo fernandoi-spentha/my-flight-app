@@ -1175,6 +1175,18 @@ function renderBriefing(b) {
   // Narrative
   h += '<div class="card fi"><div class="card-title">✅ Tu briefing</div><div class="narr">' + b.narr + '</div></div>';
 
+  // === TURBULENCE MAP — route line colored by turbulence level ===
+  h += '<div class="card fi"><div class="card-title" style="display:flex;align-items:center;justify-content:space-between">Mapa de turbulencia<span style="background:#1a3a2a;color:#34d399;font-size:10px;padding:3px 10px;border-radius:12px;font-weight:600">● En ruta</span></div>';
+  h += '<div style="position:relative;background:#0d1b2a;border-radius:12px;padding:16px 12px 10px;overflow:hidden">';
+  h += '<canvas id="turbMap" width="800" height="260" style="width:100%;height:130px;display:block"></canvas>';
+  h += '</div>';
+  h += '<div style="margin-top:8px;display:flex;gap:14px;justify-content:center;font-size:11px;color:#7a8ba8">';
+  h += '<span><span style="display:inline-block;width:20px;height:4px;border-radius:2px;background:#34d399;vertical-align:middle;margin-right:5px"></span>Sin turbulencia</span>';
+  h += '<span><span style="display:inline-block;width:20px;height:4px;border-radius:2px;background:#fbbf24;vertical-align:middle;margin-right:5px"></span>Leve</span>';
+  h += '<span><span style="display:inline-block;width:20px;height:4px;border-radius:2px;background:#f97316;vertical-align:middle;margin-right:5px"></span>Moderada</span>';
+  h += '</div>';
+  h += '</div>';
+
   // Cloud cross-section chart — canvas
   h += '<div class="card fi"><div class="card-title">☁️ Perfil de vuelo y nubes</div>';
   h += '<div style="position:relative;background:#0d1220;border-radius:10px;padding:12px;overflow:hidden">';
@@ -1304,10 +1316,99 @@ function renderBriefing(b) {
 
   document.getElementById('OUT').innerHTML = h;
 
-  // Draw cloud cross-section chart
+  // Draw turbulence map + cloud cross-section chart
+  drawTurbMap(b);
   drawCloudChart(b);
 
   document.getElementById('btnBack').onclick = goBack;
+}
+
+function drawTurbMap(b) {
+  var canvas = document.getElementById('turbMap');
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+  var W = canvas.width, H = canvas.height, dur = b.dur;
+  var padL = 50, padR = 50, padT = 30, padB = 16;
+  var cW = W - padL - padR, cH = H - padT - padB;
+
+  ctx.fillStyle = '#0d1b2a';
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle grid
+  ctx.strokeStyle = 'rgba(78,158,255,.06)';
+  ctx.lineWidth = 1;
+  for (var gc = 1; gc < 7; gc++) {
+    var gx = padL + (gc / 7) * cW;
+    ctx.beginPath(); ctx.moveTo(gx, padT - 10); ctx.lineTo(gx, padT + cH + 4); ctx.stroke();
+  }
+  for (var gr = 0; gr < 3; gr++) {
+    var gy2 = padT + (gr / 2) * cH;
+    ctx.beginPath(); ctx.moveTo(padL, gy2); ctx.lineTo(padL + cW, gy2); ctx.stroke();
+  }
+
+  // Build turbulence points along route
+  var turbColors = ['#34d399', '#fbbf24', '#f97316', '#ef4444'];
+  var pts = [];
+  var nSteps = 120;
+  for (var si = 0; si <= nSteps; si++) {
+    var m = (si / nSteps) * dur;
+    var frac = si / nSteps;
+    var lvl = 0;
+    if (b.turbPhases && b.turbPhases.points) {
+      var bestTP = null, bestDist = Infinity;
+      for (var tpi = 0; tpi < b.turbPhases.points.length; tpi++) {
+        var dd = Math.abs(b.turbPhases.points[tpi].min - m);
+        if (dd < bestDist) { bestDist = dd; bestTP = b.turbPhases.points[tpi]; }
+      }
+      if (bestTP) lvl = bestTP.level;
+    }
+    // Gentle arc from lower-left to upper-right, like the screenshot
+    var baseY = padT + cH * 0.7 - Math.sin(frac * Math.PI) * cH * 0.55;
+    // Tiny noise for turbulent segments
+    var noise = 0;
+    if (lvl >= 2) noise = (Math.sin(si * 3.7) * 2 + Math.cos(si * 5.1) * 1.5) * (lvl * 0.6);
+    else if (lvl === 1) noise = Math.sin(si * 2.3) * 0.8;
+    pts.push({x: padL + frac * cW, y: baseY + noise, lvl: lvl});
+  }
+
+  // Glow pass
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (var g = 0; g < pts.length - 1; g++) {
+    ctx.strokeStyle = turbColors[Math.min(pts[g].lvl, 3)];
+    ctx.globalAlpha = 0.15; ctx.lineWidth = 14;
+    ctx.beginPath(); ctx.moveTo(pts[g].x, pts[g].y); ctx.lineTo(pts[g+1].x, pts[g+1].y); ctx.stroke();
+  }
+  ctx.globalAlpha = 1.0;
+
+  // Main line
+  for (var p = 0; p < pts.length - 1; p++) {
+    ctx.strokeStyle = turbColors[Math.min(pts[p].lvl, 3)];
+    ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(pts[p].x, pts[p].y); ctx.lineTo(pts[p+1].x, pts[p+1].y); ctx.stroke();
+  }
+
+  // Origin & destination dots (hollow white circles)
+  function drawDot(cx, cy) {
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#0d1b2a';
+    ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI * 2); ctx.fill();
+  }
+  drawDot(pts[0].x, pts[0].y);
+  drawDot(pts[pts.length-1].x, pts[pts.length-1].y);
+
+  // Airport labels
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = 'bold 22px -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(b.fl.from, pts[0].x, pts[0].y + 22);
+  ctx.fillText(b.fl.to, pts[pts.length-1].x, pts[pts.length-1].y + 22);
+
+  // Plane icon at midpoint
+  var midIdx = Math.floor(pts.length / 2);
+  ctx.fillStyle = '#e2e8f0';
+  ctx.font = '22px sans-serif';
+  ctx.fillText('✈', pts[midIdx].x, pts[midIdx].y - 12);
 }
 
 function drawCloudChart(b) {
