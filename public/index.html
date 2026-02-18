@@ -1110,26 +1110,11 @@ function renderBriefing(b) {
   h += '<canvas id="turbMap" width="800" height="260" style="width:100%;height:130px;display:block"></canvas>';
   h += '</div>';
   h += '<div style="margin-top:8px;display:flex;gap:14px;justify-content:center;font-size:11px;color:#7a8ba8">';
-  h += '<span><span style="display:inline-block;width:20px;height:4px;border-radius:2px;background:#34d399;vertical-align:middle;margin-right:5px"></span>Sin turbulencia</span>';
-  h += '<span><span style="display:inline-block;width:20px;height:4px;border-radius:2px;background:#fbbf24;vertical-align:middle;margin-right:5px"></span>Leve</span>';
-  h += '<span><span style="display:inline-block;width:20px;height:4px;border-radius:2px;background:#f97316;vertical-align:middle;margin-right:5px"></span>Moderada</span>';
+  h += '<span><span style="display:inline-block;width:20px;height:4px;border-radius:2px;background:#34d399;vertical-align:middle;margin-right:5px"></span>Imperceptible</span>';
+  h += '<span><span style="display:inline-block;width:20px;height:4px;border-radius:2px;background:#7a8ba8;vertical-align:middle;margin-right:5px"></span>Baja</span>';
+  h += '<span><span style="display:inline-block;width:20px;height:4px;border-radius:2px;background:#94a3b8;vertical-align:middle;margin-right:5px"></span>Baja / Media</span>';
   h += '</div>';
-  h += '</div>';
-
-  // ============================================================
-  // PREMIUM CONTENT — single blurred block
-  // ============================================================
-  h += '<div class="premium-card" style="position:relative;overflow:hidden">';
-  h += '<div style="filter:blur(5px);-webkit-filter:blur(5px);pointer-events:none">';
-
-  // Turbulence estimated card
-  h += '<div class="card fi">';
-  h += '<div class="card-title">✈️ Turbulencia estimada</div>';
-  h += '<div class="turb-bar"><div class="turb-fill" style="width:' + turbWidths[tp.max] + ';background:' + turbColors[tp.max] + '"></div></div>';
-  h += '<div style="display:flex;justify-content:space-between;font-size:10px;color:#4a5873;margin-top:4px"><span>Imperceptible</span><span>Baja</span><span>Baja/Media</span><span>Media</span><span>Fuerte</span></div>';
-  h += '<div style="text-align:center;margin-top:10px;font-size:15px;font-weight:600;color:' + turbColors[tp.max] + '">' + turbLabels[tp.max] + '</div>';
-
-  // Phase breakdown
+  // Phase breakdown boxes — FREE
   h += '<div style="margin-top:12px;display:flex;gap:8px">';
   h += '<div style="flex:1;background:#0a0e1a;border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:#4a5873;margin-bottom:4px">Ascenso</div><div style="font-size:13px;font-weight:500;color:' + turbColors[tp.climb] + '">' + turbLabels[tp.climb] + '</div></div>';
   h += '<div style="flex:1;background:#0a0e1a;border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:#4a5873;margin-bottom:4px">Crucero</div><div style="font-size:13px;font-weight:500;color:' + turbColors[tp.cruise] + '">' + turbLabels[tp.cruise];
@@ -1148,6 +1133,17 @@ function renderBriefing(b) {
   h += '</div></div>';
   h += '<div style="flex:1;background:#0a0e1a;border-radius:8px;padding:10px;text-align:center"><div style="font-size:11px;color:#4a5873;margin-bottom:4px">Descenso</div><div style="font-size:13px;font-weight:500;color:' + turbColors[tp.descent] + '">' + turbLabels[tp.descent] + '</div></div>';
   h += '</div>';
+  h += '</div>';
+
+  // ============================================================
+  // PREMIUM CONTENT — single blurred block
+  // ============================================================
+  h += '<div class="premium-card" style="position:relative;overflow:hidden">';
+  h += '<div style="filter:blur(5px);-webkit-filter:blur(5px);pointer-events:none">';
+
+  // Detailed turbulence narrative
+  h += '<div class="card fi">';
+  h += '<div class="card-title">✈️ Análisis detallado de turbulencia</div>';
   // Human-readable turbulence narrative
   var turbNarr = '';
   var turbLabelsLC = ['imperceptible', 'baja', 'baja/media', 'media', 'fuerte'];
@@ -1379,7 +1375,7 @@ function drawTurbMap(b) {
   }
 
   // Build turbulence points along route
-  var turbColors = ['#34d399', '#fbbf24', '#f97316', '#ef4444'];
+  var turbColors = ['#34d399', '#7a8ba8', '#94a3b8', '#64748b', '#475569']; // same as app: imperceptible, baja, baja/media, media, fuerte
   var pts = [];
   var nSteps = 120;
   for (var si = 0; si <= nSteps; si++) {
@@ -1406,7 +1402,7 @@ function drawTurbMap(b) {
   // Glow pass
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   for (var g = 0; g < pts.length - 1; g++) {
-    ctx.strokeStyle = turbColors[Math.min(pts[g].lvl, 3)];
+    ctx.strokeStyle = turbColors[Math.min(pts[g].lvl, 4)];
     ctx.globalAlpha = 0.15; ctx.lineWidth = 14;
     ctx.beginPath(); ctx.moveTo(pts[g].x, pts[g].y); ctx.lineTo(pts[g+1].x, pts[g+1].y); ctx.stroke();
   }
@@ -1414,7 +1410,7 @@ function drawTurbMap(b) {
 
   // Main line
   for (var p = 0; p < pts.length - 1; p++) {
-    ctx.strokeStyle = turbColors[Math.min(pts[p].lvl, 3)];
+    ctx.strokeStyle = turbColors[Math.min(pts[p].lvl, 4)];
     ctx.lineWidth = 5;
     ctx.beginPath(); ctx.moveTo(pts[p].x, pts[p].y); ctx.lineTo(pts[p+1].x, pts[p+1].y); ctx.stroke();
   }
